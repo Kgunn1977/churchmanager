@@ -1,0 +1,9 @@
+# PHP / server
+*.log
+*.cache
+/vendor/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
