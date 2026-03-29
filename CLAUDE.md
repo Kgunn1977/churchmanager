@@ -164,3 +164,14 @@ buildings
 - Keep all JS inline in the PHP file (no separate .js files unless asked)
 - Run `requireLogin()` at the top of every page and API file
 - Use `htmlspecialchars()` on all output, `intval()` / `trim()` on all input
+
+---
+
+## Dev Login
+- **Email:** k.gunn@northsummit.com
+- **Password:** Welcome1!
+
+---
+
+## Local File Path
+- Project files on host machine: `C:\Users\kgunn\Documents\churchmanager`

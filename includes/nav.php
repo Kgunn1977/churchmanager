@@ -11,8 +11,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'Church Facility Manager' ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <?= $extraHead ?? '' ?>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-100 min-h-screen"<?= isset($bodyAttr) ? ' '.$bodyAttr : '' ?>>
 
 <nav class="bg-blue-800 text-white shadow-lg">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
