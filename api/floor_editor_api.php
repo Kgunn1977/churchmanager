@@ -117,10 +117,43 @@ switch ($action) {
         $id = intval($input['id'] ?? 0);
         if (!$id) { echo json_encode(['error' => 'id required']); break; }
         try {
-            $stmt = $db->prepare("DELETE FROM rooms WHERE id = ?");
+            $db->beginTransaction();
+
+            // Check if this room is part of a link group
+            $stmt = $db->prepare("SELECT link_id, original_name FROM room_link_members WHERE room_id = ?");
             $stmt->execute([$id]);
+            $member = $stmt->fetch();
+
+            if ($member) {
+                $linkId = (int)$member['link_id'];
+
+                // How many members remain after removing this room?
+                $countStmt = $db->prepare("SELECT COUNT(*) FROM room_link_members WHERE link_id = ?");
+                $countStmt->execute([$linkId]);
+                $remainingCount = (int)$countStmt->fetchColumn() - 1;
+
+                // Remove this room from the link group
+                $db->prepare("DELETE FROM room_link_members WHERE link_id = ? AND room_id = ?")->execute([$linkId, $id]);
+
+                if ($remainingCount < 2) {
+                    // Not enough rooms to remain linked — dissolve the group, restore names
+                    $restoreStmt = $db->prepare("SELECT room_id, original_name FROM room_link_members WHERE link_id = ?");
+                    $restoreStmt->execute([$linkId]);
+                    $survivors = $restoreStmt->fetchAll();
+                    $renameStmt = $db->prepare("UPDATE rooms SET name = ? WHERE id = ?");
+                    foreach ($survivors as $s) {
+                        $renameStmt->execute([$s['original_name'], $s['room_id']]);
+                    }
+                    $db->prepare("DELETE FROM room_link_members WHERE link_id = ?")->execute([$linkId]);
+                    $db->prepare("DELETE FROM room_links WHERE id = ?")->execute([$linkId]);
+                }
+            }
+
+            $db->prepare("DELETE FROM rooms WHERE id = ?")->execute([$id]);
+            $db->commit();
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
+            $db->rollBack();
             echo json_encode(['error' => $e->getMessage()]);
         }
         break;

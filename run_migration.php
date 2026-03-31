@@ -1,95 +1,91 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 requireLogin();
-if (!isAdmin()) { die('Admin access required.'); }
-
-$confirmed = ($_POST['confirm'] ?? '') === 'yes';
-
-if (!$confirmed): ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Migration — Church Facility Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-8">
-<div class="bg-white rounded-2xl shadow-sm p-8 w-full max-w-lg">
-    <h1 class="text-xl font-bold text-gray-800 mb-2">Database Migration</h1>
-    <p class="text-gray-500 text-sm mb-6">The following changes will be made to the database:</p>
-    <ul class="text-sm text-gray-700 space-y-2 mb-8 pl-4">
-        <li class="flex items-start gap-2">
-            <span class="text-blue-500 mt-0.5">▸</span>
-            Add <code class="bg-gray-100 px-1 rounded">abbreviation</code> column (VARCHAR 20) to the <code class="bg-gray-100 px-1 rounded">rooms</code> table
-        </li>
-    </ul>
-    <div class="flex gap-3">
-        <a href="/pages/facilities.php"
-           class="flex-1 text-center border border-gray-300 hover:bg-gray-50 text-gray-600 font-semibold py-2.5 rounded-xl text-sm transition">
-            Cancel
-        </a>
-        <form method="POST" class="flex-1">
-            <input type="hidden" name="confirm" value="yes">
-            <button type="submit"
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">
-                Run Migration
-            </button>
-        </form>
-    </div>
-</div>
-</body>
-</html>
-<?php exit; endif;
-
+if (!isAdmin()) { http_response_code(403); exit('Admins only.'); }
 require_once __DIR__ . '/config/database.php';
 $db = getDB();
+?>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Migration — Room Links</title>
+<style>
+body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 680px; margin: 40px auto; padding: 0 20px; background: #f8fafc; color: #1e293b; }
+h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.desc { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+.plan { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin-bottom: 20px; }
+.plan h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin: 0 0 10px; }
+.plan ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.9; }
+.btn { display: inline-block; padding: 10px 22px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.btn:hover { background: #1d4ed8; }
+.result { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; }
+.ok  { color: #16a34a; font-weight: 600; }
+.err { color: #dc2626; font-weight: 600; }
+</style>
+</head><body>
+<h1>Migration — Room Links + Recurrence Exceptions</h1>
+<p class="desc">Adds room linking support and recurrence exception tracking for recurring reservations.</p>
 
-$steps = [
-    "Add abbreviation column to rooms" =>
-        "ALTER TABLE rooms ADD COLUMN abbreviation VARCHAR(20) NULL AFTER name",
-];
+<?php if ($_SERVER['REQUEST_METHOD'] !== 'POST' || ($_POST['confirm'] ?? '') !== 'yes'): ?>
 
-$results = [];
-foreach ($steps as $label => $sql) {
-    try {
-        $db->exec($sql);
-        $results[] = ['ok' => true, 'label' => $label];
-    } catch (PDOException $e) {
-        if (str_contains($e->getMessage(), 'Duplicate column')) {
-            $results[] = ['ok' => true, 'label' => $label . ' (already exists — skipped)'];
-        } else {
-            $results[] = ['ok' => false, 'label' => $label, 'err' => $e->getMessage()];
+<div class="plan">
+    <h2>Changes</h2>
+    <ul>
+        <li>Create table <strong>room_links</strong> — one record per linked group (name, building_id)</li>
+        <li>Create table <strong>room_link_members</strong> — maps rooms to link groups, stores original room name for restore on unlink</li>
+        <li>Create table <strong>recurrence_exceptions</strong> — tracks deleted individual occurrences of recurring reservations</li>
+    </ul>
+</div>
+
+<form method="post">
+    <input type="hidden" name="confirm" value="yes">
+    <button class="btn" type="submit">Run Migration</button>
+</form>
+
+<?php else:
+    $statements = [
+        'Create room_links' => "
+            CREATE TABLE IF NOT EXISTS room_links (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                name        VARCHAR(255) NOT NULL,
+                building_id INT NOT NULL,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_building (building_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ",
+        'Create room_link_members' => "
+            CREATE TABLE IF NOT EXISTS room_link_members (
+                link_id       INT NOT NULL,
+                room_id       INT NOT NULL,
+                original_name VARCHAR(255) NOT NULL DEFAULT '',
+                PRIMARY KEY (link_id, room_id),
+                INDEX idx_room (room_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ",
+        'Create recurrence_exceptions' => "
+            CREATE TABLE IF NOT EXISTS recurrence_exceptions (
+                id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                reservation_id  INT UNSIGNED NOT NULL,
+                exception_date  DATE NOT NULL,
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_res_date (reservation_id, exception_date),
+                KEY idx_reservation_id (reservation_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ",
+    ];
+
+    echo '<div class="result"><h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:0 0 12px;">Results</h2>';
+    $allOk = true;
+    foreach ($statements as $label => $sql) {
+        try {
+            $db->exec($sql);
+            echo "<p class='ok'>&#10003; {$label}</p>";
+        } catch (PDOException $e) {
+            echo "<p class='err'>&#10007; {$label}: " . htmlspecialchars($e->getMessage()) . "</p>";
+            $allOk = false;
         }
     }
-}
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Migration Result</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-8">
-<div class="bg-white rounded-2xl shadow-sm p-8 w-full max-w-lg">
-    <h1 class="text-xl font-bold text-gray-800 mb-6">Migration Complete</h1>
-    <div class="space-y-3 mb-8">
-        <?php foreach ($results as $r): ?>
-        <div class="flex items-start gap-3 text-sm <?= $r['ok'] ? 'text-green-700' : 'text-red-700' ?>">
-            <span class="mt-0.5 font-bold"><?= $r['ok'] ? '✓' : '✗' ?></span>
-            <div>
-                <p class="font-medium"><?= htmlspecialchars($r['label']) ?></p>
-                <?php if (!$r['ok']): ?>
-                    <p class="text-red-500 text-xs mt-0.5"><?= htmlspecialchars($r['err']) ?></p>
-                <?php endif; ?>
-            </div>
-        </div>
-        <?php endforeach; ?>
-    </div>
-    <a href="/pages/facilities.php"
-       class="block text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">
-        ← Back to Facilities
-    </a>
-</div>
-</body>
-</html>
+    if ($allOk) {
+        echo '<p style="margin-top:14px;font-size:13px;">Migration complete. <a href="/pages/facilities.php" style="color:#2563eb;">Go to Facilities &rarr;</a></p>';
+    }
+    echo '</div>';
+endif; ?>
+</body></html>

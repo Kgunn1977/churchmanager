@@ -108,29 +108,6 @@ ob_start(); ?>
     #empty-state p { font-size: 15px; font-weight: 500; }
     #empty-state small { font-size: 12px; margin-top: 4px; }
 
-    /* ── Floor Display Pane ──────────────────────────────────── */
-    #floor-pane { width: 400px; flex-shrink: 0; background: #f1f5f9; border-right: 1px solid #d1d5db; display: flex; flex-direction: column; overflow: hidden; }
-    #floor-pane-header { padding: 10px 10px 8px; border-bottom: 1px solid #d1d5db; background: #e8ecf0; flex-shrink: 0; }
-    #floor-pane-title { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #6b7280; margin-bottom: 7px; }
-    #pane-drag-hint { margin-left: auto; font-size: 10px; font-weight: 400; font-style: italic; text-transform: none; letter-spacing: 0; opacity: 0.6; }
-    #pane-building-sel { width: 100%; background: white; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 5px 8px; font-size: 12px; font-family: ui-sans-serif, system-ui, sans-serif; cursor: pointer; outline: none; }
-    #pane-building-sel:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
-    .floor-building-divider { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af; padding: 4px 4px 2px; margin-top: 4px; font-family: ui-sans-serif, system-ui, sans-serif; }
-    #floor-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-    #floor-pane-empty { padding: 24px 12px; text-align: center; font-size: 12px; color: #9ca3af; font-family: ui-sans-serif, system-ui, sans-serif; }
-    .floor-card { background: white; border: 2px solid #e2e8f0; border-radius: 10px; overflow: hidden; user-select: none; transition: box-shadow 0.15s, opacity 0.15s, border-color 0.15s; }
-    .floor-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .floor-card.active-floor { border-color: #3b82f6; }
-    .floor-card.drag-cursor { cursor: grab; }
-    .floor-card.dragging { opacity: 0.35; cursor: grabbing; }
-    .floor-card.drag-over { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(59,130,246,0.25); }
-    .floor-card-header { padding: 6px 10px; font-size: 12px; font-weight: 600; color: #374151; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 6px; cursor: pointer; }
-    .floor-card-header:hover { background: #f0f4f8; }
-    .floor-card.active-floor .floor-card-header { background: #eff6ff; }
-    .floor-card-order { font-size: 10px; font-weight: 700; color: #9ca3af; background: #e5e7eb; border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
-    .floor-card-preview { width: 100%; display: block; background: white; cursor: pointer; }
-    .floor-card-norooms { padding: 10px; font-size: 11px; color: #9ca3af; text-align: center; font-family: ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
-
     /* ── Room Info Pane ──────────────────────────────────────── */
     #room-pane { width: 400px; flex-shrink: 0; background: #f8fafc; border-left: 1px solid #d1d5db; display: flex; flex-direction: column; overflow: hidden; }
     #room-pane-header { padding: 10px 14px 8px; border-bottom: 1px solid #d1d5db; background: #e8ecf0; flex-shrink: 0; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #6b7280; font-family: ui-sans-serif, system-ui, sans-serif; }
@@ -151,6 +128,12 @@ require_once __DIR__ . '/../includes/nav.php';
 require_once __DIR__ . '/../config/database.php';
 $db = getDB();
 $buildings = $db->query("SELECT id, name FROM buildings ORDER BY name")->fetchAll();
+
+// Floor plan picker config
+$fp_id        = 'fac';
+$fp_div_key   = 'fp_w_fac';
+$fp_default_w = 340;
+$fp_buildings = $buildings;
 ?>
 
 <!-- ═══════════════════ TOOLBAR ═══════════════════ -->
@@ -171,43 +154,41 @@ $buildings = $db->query("SELECT id, name FROM buildings ORDER BY name")->fetchAl
         </svg>Move
     </button>
     <button id="btn-pan" onclick="setMode('pan')" title="Pan mode">✋ Pan</button>
+    <div class="tb-sep"></div>
+    <button id="btn-link"   disabled onclick="doLink()"   title="Link selected rooms across floors" style="background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.5);">⛓ Link</button>
+    <button id="btn-unlink" disabled onclick="doUnlink()" title="Unlink selected rooms" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4);">✂ Unlink</button>
     <div style="flex:1"></div>
     <span id="floor-label" style="font-size:12px;color:rgba(255,255,255,0.6);font-style:italic;"></span>
+</div>
+
+<!-- Link-name modal -->
+<div id="link-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:16px;padding:28px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);font-family:ui-sans-serif,system-ui,sans-serif;">
+        <h3 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">Link Rooms</h3>
+        <p id="link-modal-desc" style="font-size:12px;color:#6b7280;margin:0 0 16px;"></p>
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:4px;">Shared Room Name</label>
+        <input id="link-name-input" type="text" placeholder="e.g. Main Sanctuary"
+               style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:14px;margin-bottom:16px;outline:none;color:#111827;box-sizing:border-box;"
+               onkeydown="if(event.key==='Enter')confirmLink()">
+        <div style="display:flex;gap:8px;">
+            <button onclick="confirmLink()" style="flex:1;padding:9px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Link Rooms</button>
+            <button onclick="closeLinkModal()" style="flex:1;padding:9px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>
+        </div>
+    </div>
 </div>
 
 <!-- ═══════════════════ MAIN ROW ═══════════════════ -->
 <div id="main-row">
 
-<!-- ═══════════════════ FLOOR PANE ═══════════════════ -->
-<div id="floor-pane">
-    <div id="floor-pane-header">
-        <div id="floor-pane-title">
-            <svg style="width:11px;height:11px;opacity:0.5;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-            </svg>
-            Floor Plans
-            <span id="pane-drag-hint">drag to reorder</span>
-        </div>
-        <select id="pane-building-sel" onchange="onPaneBuildingChange()">
-            <option value="">All Buildings</option>
-            <?php foreach ($buildings as $b): ?>
-            <option value="<?= $b['id'] ?>"><?= htmlspecialchars($b['name']) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </div>
-    <div id="floor-list">
-        <div id="floor-pane-empty">Loading…</div>
-    </div>
-</div>
-
 <!-- ═══════════════════ CANVAS ═══════════════════ -->
+<?php require_once __DIR__ . '/../includes/floor_plan_picker.php'; ?>
 <div id="canvas-wrap">
     <div id="empty-state">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
             <polyline stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" points="9 22 9 12 15 12 15 22"/>
         </svg>
-        <p>Click a floor in the left panel to begin</p>
+        <p>Click a room in the floor plan picker to begin</p>
         <small>Or use the toolbar to create a building and floor</small>
     </div>
 
@@ -222,6 +203,16 @@ $buildings = $db->query("SELECT id, name FROM buildings ORDER BY name")->fetchAl
             </pattern>
         </defs>
         <rect id="grid-bg" fill="url(#grid-major)" />
+        <!-- Origin marker at (0,0) -->
+        <g id="origin-marker" pointer-events="none">
+            <!-- Axis lines -->
+            <line x1="-2" y1="0" x2="2" y2="0" stroke="#ef4444" stroke-width="0.25" vector-effect="non-scaling-stroke"/>
+            <line x1="0" y1="-2" x2="0" y2="2" stroke="#ef4444" stroke-width="0.25" vector-effect="non-scaling-stroke"/>
+            <!-- Dot at origin -->
+            <circle cx="0" cy="0" r="0.6" fill="#ef4444" vector-effect="non-scaling-stroke"/>
+            <!-- "0,0" label -->
+            <text x="0.8" y="-0.4" font-size="1.8" fill="#ef4444" font-family="ui-sans-serif,system-ui,sans-serif" font-weight="700" vector-effect="non-scaling-stroke">0,0</text>
+        </g>
         <g id="rooms-layer"></g>
         <rect id="draw-rect" style="display:none;" />
         <g id="handles-layer"></g>
@@ -232,7 +223,7 @@ $buildings = $db->query("SELECT id, name FROM buildings ORDER BY name")->fetchAl
         <button onclick="zoomBy(0.8)" title="Zoom out">−</button>
         <button onclick="resetView()" title="Fit to window" style="font-size:11px;font-weight:700;">FIT</button>
     </div>
-    <div id="status-bar">Click a floor plan to begin</div>
+    <div id="status-bar">Click a room in the floor plan picker to load that floor</div>
 </div>
 
 <!-- ═══════════════════ ROOM PANE ═══════════════════ -->
@@ -253,6 +244,7 @@ $buildings = $db->query("SELECT id, name FROM buildings ORDER BY name")->fetchAl
         </div>
     </div>
 </div>
+
 
 </div><!-- end main-row -->
 
@@ -291,6 +283,9 @@ $buildings = $db->query("SELECT id, name FROM buildings ORDER BY name")->fetchAl
 // ─────────────────────────────────────────────────────────────────────────────
 const API = '/api/floor_editor_api.php';
 
+// Buildings list (PHP-injected, kept in sync as buildings are created)
+let facBuildings = <?= json_encode(array_map(fn($b) => ['id' => (int)$b['id'], 'name' => $b['name']], $buildings)) ?>;
+
 let state = {
     buildingId:     null,
     floorId:        null,
@@ -303,7 +298,7 @@ let state = {
     drawStart:      null,
     panStart:       null,
     panVStart:      null,
-    movingRoomId:   null,
+    movingRoomIds:  [],
     movingOffset:   null,
     dlgType:        null,
     pendingPolygon: null,
@@ -401,10 +396,49 @@ function render() {
 }
 
 function pointsAttr(pts) { return pts.map(([x,y]) => `${x},${y}`).join(' '); }
+// Pole of inaccessibility — point furthest from all edges (Mapbox polylabel algorithm).
+// Produces labels that stay visually inside irregular/concave room shapes.
 function polyCenter(pts) {
-    let sx=0, sy=0;
-    for (const [x,y] of pts) { sx+=x; sy+=y; }
-    return [sx/pts.length, sy/pts.length];
+    let mnX=Infinity,mnY=Infinity,mxX=-Infinity,mxY=-Infinity;
+    for (const [x,y] of pts) { mnX=Math.min(mnX,x);mnY=Math.min(mnY,y);mxX=Math.max(mxX,x);mxY=Math.max(mxY,y); }
+    const h0=Math.min(mxX-mnX,mxY-mnY)/2;
+    if (!h0) return [(mnX+mxX)/2,(mnY+mxY)/2];
+    const prec=h0/16;
+    const heap=[];
+    const _hpush=c=>{
+        heap.push(c); let i=heap.length-1;
+        while(i>0){const p=(i-1)>>1;if(heap[p][4]>=heap[i][4])break;[heap[p],heap[i]]=[heap[i],heap[p]];i=p;}
+    };
+    const _hpop=()=>{
+        const top=heap[0],last=heap.pop();
+        if(heap.length){heap[0]=last;let i=0;
+            for(;;){let j=2*i+1;if(j>=heap.length)break;
+                if(j+1<heap.length&&heap[j+1][4]>heap[j][4])j++;
+                if(heap[i][4]>=heap[j][4])break;[heap[i],heap[j]]=[heap[j],heap[i]];i=j;}}
+        return top;
+    };
+    const _dist=(px,py)=>{
+        let inside=false,minD=Infinity;
+        for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+            const[xi,yi]=pts[i],[xj,yj]=pts[j];
+            if((yi>py)!==(yj>py)&&px<(xj-xi)*(py-yi)/(yj-yi)+xi)inside=!inside;
+            const dx=xj-xi,dy=yj-yi,t=Math.max(0,Math.min(1,((px-xi)*dx+(py-yi)*dy)/(dx*dx+dy*dy||1)));
+            const ex=xi+t*dx-px,ey=yi+t*dy-py;minD=Math.min(minD,ex*ex+ey*ey);
+        }
+        return(inside?1:-1)*Math.sqrt(minD);
+    };
+    const _cell=(x,y,h)=>{const d=_dist(x,y);return[x,y,h,d,d+h*1.4142];};
+    for(let x=mnX+h0;x<mxX;x+=h0*2)for(let y=mnY+h0;y<mxY;y+=h0*2)_hpush(_cell(x,y,h0));
+    let bx=(mnX+mxX)/2,by=(mnY+mxY)/2,bd=_dist(bx,by);
+    while(heap.length){
+        const[cx,cy,h,d,pot]=_hpop();
+        if(d>bd){bd=d;bx=cx;by=cy;}
+        if(pot-bd<=prec)continue;
+        const h2=h/2;
+        _hpush(_cell(cx-h2,cy-h2,h2));_hpush(_cell(cx+h2,cy-h2,h2));
+        _hpush(_cell(cx-h2,cy+h2,h2));_hpush(_cell(cx+h2,cy+h2,h2));
+    }
+    return[bx,by];
 }
 
 function renderRoom(room) {
@@ -428,9 +462,24 @@ function renderRoom(room) {
             return;
         }
         if (state.mode === 'move' && room.map_points) {
+            // If clicked room isn't selected, replace selection with just this room
+            if (!state.selectedRoomIds.has(room.id)) {
+                state.selectedRoomIds = new Set([room.id]);
+                updateRoomPane(); render();
+            }
             const pt = svgPt(e.clientX, e.clientY);
-            state.movingRoomId  = room.id;
-            state.movingOffset  = { ox: pt.x, oy: pt.y, origPts: room.map_points.map(p=>[...p]) };
+            // Collect all selected rooms that have map_points
+            const ids = [...state.selectedRoomIds].filter(id => {
+                const r = state.rooms.find(r2 => r2.id === id);
+                return r && r.map_points;
+            });
+            const origPtsByRoomId = {};
+            ids.forEach(id => {
+                const r = state.rooms.find(r2 => r2.id === id);
+                origPtsByRoomId[id] = r.map_points.map(p => [...p]);
+            });
+            state.movingRoomIds = ids;
+            state.movingOffset  = { ox: pt.x, oy: pt.y, origPtsByRoomId };
             return;
         }
         if (state.mode === 'draw') {
@@ -508,7 +557,6 @@ async function selectFloor(floor) {
 
     showCanvas(true);
     await loadRooms();
-    renderFloorPane();
     updateRoomPane();
 }
 
@@ -516,16 +564,9 @@ async function loadRooms() {
     if (!state.floorId) return;
     const data = await apiFetch(`get_rooms&floor_id=${state.floorId}`);
     state.rooms = data;
-    // Sync abbreviation into pane cache
-    syncPaneRooms(state.floorId, data);
     resetView();
     render();
     setStatus(`${state.rooms.length} room(s) — click to select`);
-}
-
-function syncPaneRooms(floorId, rooms) {
-    const pf = paneFloors.find(f => f.id === floorId);
-    if (pf) pf.rooms = rooms.map(r => ({ id: r.id, name: r.name, abbreviation: r.abbreviation, map_points: r.map_points }));
 }
 
 function showCanvas(show) {
@@ -542,7 +583,7 @@ function showCanvas(show) {
 // ─────────────────────────────────────────────────────────────────────────────
 function setMode(m) {
     state.mode = m;
-    state.movingRoomId = null; state.movingOffset = null;
+    state.movingRoomIds = []; state.movingOffset = null;
     if (m !== 'draw') state.activeRoomId = null;
     svg.classList.toggle('select-mode', m === 'select');
     svg.classList.toggle('pan-mode',    m === 'pan');
@@ -649,12 +690,14 @@ function onSvgMouseMove(e) {
         if (!room) return;
         room.map_points[d.vi]=[sx,sy]; render(); return;
     }
-    if (state.movingRoomId !== null && state.movingOffset) {
-        const room=state.rooms.find(r=>r.id===state.movingRoomId);
-        if (!room||!room.map_points) return;
+    if (state.movingRoomIds.length && state.movingOffset) {
         const rp=svgPt(e.clientX,e.clientY);
         const dx=snap(rp.x)-snap(state.movingOffset.ox), dy=snap(rp.y)-snap(state.movingOffset.oy);
-        room.map_points=state.movingOffset.origPts.map(([x,y])=>[x+dx,y+dy]);
+        for (const id of state.movingRoomIds) {
+            const r=state.rooms.find(r2=>r2.id===id);
+            if (!r||!r.map_points) continue;
+            r.map_points=state.movingOffset.origPtsByRoomId[id].map(([x,y])=>[x+dx,y+dy]);
+        }
         render(); return;
     }
 }
@@ -681,10 +724,12 @@ async function onSvgMouseUp(e) {
         if (room) await saveRoom(room);
         state.dragging=null; render(); return;
     }
-    if (state.movingRoomId !== null) {
-        const room=state.rooms.find(r=>r.id===state.movingRoomId);
-        if (room) await saveRoom(room);
-        state.movingRoomId=null; state.movingOffset=null; svg.style.cursor=''; render(); return;
+    if (state.movingRoomIds.length) {
+        await Promise.all(state.movingRoomIds.map(id => {
+            const r=state.rooms.find(r2=>r2.id===id);
+            return r ? saveRoom(r) : Promise.resolve();
+        }));
+        state.movingRoomIds=[]; state.movingOffset=null; svg.style.cursor=''; render(); return;
     }
 }
 
@@ -746,8 +791,8 @@ async function ctxDelete() {
     state.rooms=state.rooms.filter(r=>r.id!==room.id);
     state.selectedRoomIds.delete(room.id);
     if(state.activeRoomId===room.id) state.activeRoomId=null;
-    syncPaneRooms(state.floorId, state.rooms);
-    renderFloorPane(); render(); updateRoomPane();
+    facPicker.load();
+    render(); updateRoomPane();
     setStatus(`Room "${room.name}" deleted`);
 }
 
@@ -767,13 +812,10 @@ function openDlg(type, extra) {
     }
     else if (type==='new-floor') {
         dlgTitle.textContent='New Floor';
-        // Build building options from pane filter dropdown
-        const paneSel=document.getElementById('pane-building-sel');
         let opts='';
-        for (const opt of paneSel.options) {
-            if (!opt.value) continue;
-            const sel=(parseInt(opt.value)===state.buildingId)?' selected':'';
-            opts+=`<option value="${opt.value}"${sel}>${escHtml(opt.text)}</option>`;
+        for (const b of facBuildings) {
+            const sel=(b.id===state.buildingId)?' selected':'';
+            opts+=`<option value="${b.id}"${sel}>${escHtml(b.name)}</option>`;
         }
         if (!opts) opts='<option value="">— Add a building first —</option>';
         dlgBody.innerHTML=`<label>Building</label><select id="dlg-f1">${opts}</select><label>Floor Name</label><input type="text" id="dlg-f2" placeholder="e.g. Ground Floor" />`;
@@ -804,11 +846,8 @@ async function dlgSubmit() {
         closeDlg();
         const result=await apiPost('create_building',{name});
         if(result.error){alert(result.error);return;}
-        // Add to pane filter
-        const pOpt=document.createElement('option');
-        pOpt.value=result.id; pOpt.textContent=result.name;
-        document.getElementById('pane-building-sel').appendChild(pOpt);
-        await loadFloorPane();
+        facBuildings.push({id: result.id, name: result.name});
+        facPicker.load();
         setStatus(`Building "${result.name}" created`);
     }
     else if (type==='new-floor') {
@@ -818,13 +857,9 @@ async function dlgSubmit() {
         closeDlg();
         const result=await apiPost('create_floor',{building_id:bid,name});
         if(result.error){alert(result.error);return;}
-        // Reset pane to All so new floor is visible, then select it
-        paneBuildingFilter=null;
-        document.getElementById('pane-building-sel').value='';
-        document.getElementById('pane-drag-hint').style.display='';
-        await loadFloorPane();
-        const newFloor=paneFloors.find(f=>f.id===result.id);
-        if(newFloor) await selectFloor(newFloor);
+        await facPicker.load();
+        const bldName = facBuildings.find(b=>b.id===bid)?.name||'';
+        await selectFloor({id: result.id, building_id: bid, name, building_name: bldName});
         setStatus(`Floor "${result.name}" created`);
     }
     else if (type==='new-room') {
@@ -837,8 +872,8 @@ async function dlgSubmit() {
         state.rooms.push(result);
         state.selectedRoomIds=new Set([result.id]);
         state.activeRoomId=null;
-        syncPaneRooms(state.floorId,state.rooms);
-        renderFloorPane(); render(); updateRoomPane();
+        facPicker.load();
+        render(); updateRoomPane();
         setStatus(`Room "${name}" created — draw its shape on the canvas`);
     }
     else if (type==='new-room-draw') {
@@ -852,8 +887,8 @@ async function dlgSubmit() {
         await apiPost('save_room',{id:result.id,map_points:polygon});
         state.rooms.push(result);
         state.selectedRoomIds=new Set([result.id]);
-        syncPaneRooms(state.floorId,state.rooms);
-        renderFloorPane(); render(); updateRoomPane();
+        facPicker.load();
+        render(); updateRoomPane();
         setStatus(`Room "${name}" created`);
     }
     else if (type==='rename-room') {
@@ -862,8 +897,7 @@ async function dlgSubmit() {
         const room=state.rooms.find(r=>r.id===dlgData.id); if(!room) return;
         room.name=name;
         await saveRoom(room);
-        syncPaneRooms(state.floorId,state.rooms);
-        renderFloorPane(); render(); updateRoomPane();
+        render(); updateRoomPane();
         setStatus(`Room renamed to "${name}"`);
     }
 }
@@ -880,8 +914,8 @@ async function apiPost(action, body) {
 }
 async function saveRoom(room) {
     const res=await apiPost('save_room',{id:room.id,name:room.name,map_points:room.map_points});
-    syncPaneRooms(state.floorId,state.rooms);
-    renderFloorPane(); return res;
+    facPicker.load();
+    return res;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -979,184 +1013,144 @@ async function saveParam(field, value, multipleAttr) {
         await apiPost('save_room',{id, [field]:room[field]});
     }
 
-    syncPaneRooms(state.floorId,state.rooms);
-    renderFloorPane();
+    facPicker.load();
     render(); // refresh labels (name change)
     updateRoomPane(); // refresh pane (clears "multiple" state if all now same)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FLOOR DISPLAY PANE
-// ─────────────────────────────────────────────────────────────────────────────
-let paneFloors         = [];
-let paneDragSrc        = null;
-let paneBuildingFilter = null;
-let paneDragActive     = false;
-
-const PANE_WIDTH    = 384;
-const PANE_PREVIEW_H= 160;
-
-async function loadFloorPane() {
-    paneFloors = paneBuildingFilter === null
-        ? await apiFetch('get_all_floors_rooms')
-        : await apiFetch(`get_building_floors_rooms&building_id=${paneBuildingFilter}`);
-    renderFloorPane();
-}
-function onPaneBuildingChange() {
-    const sel=document.getElementById('pane-building-sel');
-    paneBuildingFilter=parseInt(sel.value)||null;
-    document.getElementById('pane-drag-hint').style.display=paneBuildingFilter===null?'':'none';
-    loadFloorPane();
-}
-
-function renderFloorPane() {
-    const list=document.getElementById('floor-list');
-    list.innerHTML='';
-    const dragEnabled=(paneBuildingFilter===null);
-
-    if (!paneFloors.length) {
-        list.innerHTML=`<div id="floor-pane-empty">${paneBuildingFilter===null?'No floors yet — use "+ Floor" to add one':'No floors for this building'}</div>`;
-        return;
-    }
-
-    // Compute global scale
-    let globalMaxW=0;
-    const floorBounds=paneFloors.map(floor=>{
-        let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-        for (const room of floor.rooms) {
-            if (!room.map_points) continue;
-            for (const [x,y] of room.map_points) { minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y); }
-        }
-        if (!isFinite(minX)) return null;
-        const w=maxX-minX, h=maxY-minY;
-        if (w>globalMaxW) globalMaxW=w;
-        return {minX,minY,maxX,maxY,w,h};
-    });
-    const innerW=PANE_WIDTH-32;
-    const scale=globalMaxW>0?innerW/globalMaxW:4;
-
-    let lastBldId=null;
-    paneFloors.forEach((floor,idx)=>{
-        const bounds=floorBounds[idx];
-        // Building divider in All mode
-        if (dragEnabled && floor.building_id!==lastBldId) {
-            lastBldId=floor.building_id;
-            const div=document.createElement('div');
-            div.className='floor-building-divider';
-            div.textContent=floor.building_name||`Building ${floor.building_id}`;
-            list.appendChild(div);
-        }
-
-        const card=document.createElement('div');
-        card.className='floor-card'+(floor.id===state.floorId?' active-floor':'');
-        card.dataset.idx=idx;
-        if (dragEnabled) { card.draggable=true; card.classList.add('drag-cursor'); }
-
-        // Header (clickable)
-        const hdr=document.createElement('div');
-        hdr.className='floor-card-header';
-        hdr.innerHTML=`<span class="floor-card-order">${floor.floor_order}</span><span>${escHtml(floor.name)}</span>`;
-        card.appendChild(hdr);
-
-        // Preview SVG
-        if (!bounds) {
-            const noRooms=document.createElement('div');
-            noRooms.className='floor-card-norooms';
-            noRooms.textContent='No rooms mapped';
-            card.appendChild(noRooms);
-        } else {
-            const pad=8/scale;
-            const vx=bounds.minX-pad, vy=bounds.minY-pad;
-            const vw=bounds.w+pad*2, vh=bounds.h+pad*2;
-            const svgH=Math.min(PANE_PREVIEW_H, Math.round(vh*scale)+16);
-
-            const psvg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-            psvg.setAttribute('viewBox',`${vx} ${vy} ${vw} ${vh}`);
-            psvg.setAttribute('width','100%'); psvg.setAttribute('height',svgH);
-            psvg.setAttribute('preserveAspectRatio','xMidYMid meet');
-            psvg.className='floor-card-preview';
-
-            for (const room of floor.rooms) {
-                if (!room.map_points||room.map_points.length<3) continue;
-                const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
-                poly.setAttribute('points',room.map_points.map(([x,y])=>`${x},${y}`).join(' '));
-                poly.setAttribute('fill','rgba(59,130,246,0.15)');
-                poly.setAttribute('stroke','#1d4ed8');
-                poly.setAttribute('stroke-width','0.5');
-                poly.setAttribute('vector-effect','non-scaling-stroke');
-                psvg.appendChild(poly);
-
-                // Abbreviation label
-                const label=room.abbreviation||autoAbbrev(room.name);
-                if (label) {
-                    const rb=getRoomBounds(room.map_points);
-                    const rw=rb.maxX-rb.minX, rh=rb.maxY-rb.minY;
-                    const fs=Math.max(1.5, Math.min(4, Math.min(rw,rh)*0.22));
-                    const [lx,ly]=polyCenter(room.map_points);
-                    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-                    t.setAttribute('x',lx); t.setAttribute('y',ly);
-                    t.setAttribute('text-anchor','middle');
-                    t.setAttribute('dominant-baseline','middle');
-                    t.setAttribute('fill','#1e3a5f');
-                    t.setAttribute('font-size',String(fs));
-                    t.setAttribute('font-weight','700');
-                    t.setAttribute('pointer-events','none');
-                    t.style.fontFamily='ui-sans-serif,system-ui,sans-serif';
-                    t.textContent=label;
-                    psvg.appendChild(t);
-                }
-            }
-            card.appendChild(psvg);
-        }
-
-        // Click to load floor (left-click, not drag)
-        card.addEventListener('dragstart',()=>{ paneDragActive=true; });
-        card.addEventListener('dragend',  ()=>{ setTimeout(()=>{paneDragActive=false;},50); });
-        card.addEventListener('click',async()=>{
-            if (paneDragActive) return;
-            await selectFloor(floor);
-        });
-
-        // Drag reorder (only when All buildings)
-        if (dragEnabled) {
-            card.addEventListener('dragstart',e=>{
-                paneDragSrc=idx; card.classList.add('dragging');
-                e.dataTransfer.effectAllowed='move';
-            });
-            card.addEventListener('dragend',()=>{
-                card.classList.remove('dragging');
-                document.querySelectorAll('.floor-card.drag-over').forEach(el=>el.classList.remove('drag-over'));
-                paneDragSrc=null;
-            });
-            card.addEventListener('dragover',e=>{
-                e.preventDefault(); e.dataTransfer.dropEffect='move';
-                if (paneDragSrc!==null && paneDragSrc!==idx) {
-                    document.querySelectorAll('.floor-card.drag-over').forEach(el=>el.classList.remove('drag-over'));
-                    card.classList.add('drag-over');
-                }
-            });
-            card.addEventListener('dragleave',()=>card.classList.remove('drag-over'));
-            card.addEventListener('drop',async e=>{
-                e.preventDefault(); card.classList.remove('drag-over');
-                if (paneDragSrc===null||paneDragSrc===idx) return;
-                const moved=paneFloors.splice(paneDragSrc,1)[0];
-                paneFloors.splice(idx,0,moved);
-                const orders=paneFloors.map((f,i)=>({id:f.id,floor_order:i+1}));
-                paneFloors.forEach((f,i)=>f.floor_order=i+1);
-                renderFloorPane();
-                const result=await apiPost('reorder_floors',{orders});
-                if(result.error) console.error('reorder_floors failed:',result.error);
-            });
-        }
-
-        list.appendChild(card);
-    });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Init
 setViewBox(0, 0, 80, 60);
-loadFloorPane();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOM PICKER + LINK / UNLINK
+// ─────────────────────────────────────────────────────────────────────────────
+
+let linkedGroups = [];   // [{id, name, building_id, room_ids:[…]}]
+
+// Initialise the room-picker module
+const facPicker = new FloorPlanPicker({
+    paneId      : 'fac-fp-pane',
+    dividerId   : 'fac-fp-divider',
+    dividerKey  : 'fp_w_fac',
+    defaultWidth: 340,
+    onChange    : updateLinkButtons,
+    onRoomClick : (room, floor) => selectFloor(floor),
+});
+
+async function loadLinkedGroups() {
+    const res = await fetch('/api/room_links_api.php?action=get_links');
+    linkedGroups = await res.json();
+    facPicker.setLinkedGroups(linkedGroups);
+    updateLinkButtons();
+}
+loadLinkedGroups();
+
+/** Enable/disable Link and Unlink buttons based on current picker selection. */
+function updateLinkButtons() {
+    const sel     = facPicker.getSelection();
+    const ids     = Object.keys(sel).map(Number);
+    const btnLink = document.getElementById('btn-link');
+    const btnUnlink = document.getElementById('btn-unlink');
+
+    // Link: need 2+ rooms, all from the same building, none already linked
+    const buildings = [...new Set(Object.values(sel).map(r => r.building))];
+    const anyLinked = ids.some(id => linkedGroups.some(g => g.room_ids.includes(id)));
+    const canLink   = ids.length >= 2 && buildings.length === 1 && !anyLinked;
+
+    // Unlink: at least one selected room is in a linked group
+    const canUnlink = anyLinked && ids.length > 0;
+
+    btnLink.disabled   = !canLink;
+    btnUnlink.disabled = !canUnlink;
+}
+
+// ── Link flow ────────────────────────────────────────────
+
+function doLink() {
+    const sel  = facPicker.getSelection();
+    const ids  = Object.keys(sel).map(Number);
+    const names = ids.map(id => sel[id]?.name || `Room ${id}`).join(', ');
+    document.getElementById('link-modal-desc').textContent =
+        `Rooms to link: ${names}`;
+    document.getElementById('link-name-input').value = '';
+    document.getElementById('link-modal-overlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('link-name-input').focus(), 50);
+}
+
+function closeLinkModal() {
+    document.getElementById('link-modal-overlay').style.display = 'none';
+}
+
+async function confirmLink() {
+    const name = document.getElementById('link-name-input').value.trim();
+    if (!name) { document.getElementById('link-name-input').focus(); return; }
+
+    const sel        = facPicker.getSelection();
+    const ids        = Object.keys(sel).map(Number);
+    const buildingId = Object.values(sel)[0]?.building
+        // building name isn't enough — get building_id from pane floor data
+        ? null : null;
+
+    // Get building_id from the picker's internal floor data
+    const bldId = facPicker._floors
+        .flatMap(f => f.rooms.map(r => ({ roomId: r.id, bldId: f.building_id })))
+        .find(x => ids.includes(x.roomId))?.bldId;
+
+    if (!bldId) { alert('Could not determine building for selected rooms.'); return; }
+
+    const body = new FormData();
+    body.append('action',      'create_link');
+    body.append('name',        name);
+    body.append('building_id', bldId);
+    body.append('room_ids',    JSON.stringify(ids));
+
+    const res  = await fetch('/api/room_links_api.php', { method: 'POST', body });
+    const data = await res.json();
+    if (data.error) { alert('Error: ' + data.error); return; }
+
+    closeLinkModal();
+    // Refresh: reload floors (names changed) + linked groups
+    await loadLinkedGroups();
+    facPicker.load();       // re-fetch rooms (names updated server-side)
+}
+
+// ── Unlink flow ──────────────────────────────────────────
+
+async function doUnlink() {
+    const sel = facPicker.getSelection();
+    const ids = Object.keys(sel).map(Number);
+
+    // Find which link group(s) are affected
+    const affectedLinkIds = [...new Set(
+        ids.flatMap(id => linkedGroups.filter(g => g.room_ids.includes(id)).map(g => g.id))
+    )];
+
+    if (!affectedLinkIds.length) return;
+
+    const confirmed = confirm(
+        `Unlink ${affectedLinkIds.length} group(s)? Rooms will be restored to their original names.`
+    );
+    if (!confirmed) return;
+
+    for (const linkId of affectedLinkIds) {
+        const body = new FormData();
+        body.append('action',  'delete_link');
+        body.append('link_id', linkId);
+        const res  = await fetch('/api/room_links_api.php', { method: 'POST', body });
+        const data = await res.json();
+        if (data.error) { alert('Error: ' + data.error); return; }
+    }
+
+    facPicker.clearSelection();
+    await loadLinkedGroups();
+    facPicker.load();
+}
+
+// Close link modal on backdrop click
+document.getElementById('link-modal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('link-modal-overlay')) closeLinkModal();
+});
 </script>
 
 </body>
