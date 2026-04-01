@@ -1,7 +1,7 @@
 <?php
 $pageTitle = 'Create Supplies & Tools Catalogs — Church Facility Manager';
-require_once __DIR__ . '/includes/nav.php';
-require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/../includes/nav.php';
+require_once __DIR__ . '/../config/database.php';
 requireLogin();
 if (!isAdmin()) { echo '<p>Admin only.</p></body></html>'; exit; }
 $db = getDB();

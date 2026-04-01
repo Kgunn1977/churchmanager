@@ -1,7 +1,7 @@
 <?php
 $pageTitle = 'Migration: Task Rooms — Church Facility Manager';
-require_once __DIR__ . '/includes/nav.php';
-require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/../includes/nav.php';
+require_once __DIR__ . '/../config/database.php';
 requireLogin();
 if (!isAdmin()) { echo '<p class="text-red-600 p-8">Admin access required.</p></body></html>'; exit; }
 $db = getDB();

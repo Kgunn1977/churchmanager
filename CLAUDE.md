@@ -29,11 +29,15 @@ churchmanager/
 │   └── ...
 ├── api/                      # AJAX/JSON endpoints
 │   └── reservations_api.php  # ?action=... routing pattern
+├── migrations/               # DB migration scripts (browser-clickable)
+│   ├── run_migration.php
+│   ├── run_migration_tasks.php
+│   ├── run_migration_seed_tasks.php
+│   └── ...
 ├── dashboard.php
 ├── index.php
 ├── login.php
-├── logout.php
-└── run_migration.php         # DB migration runner (browser-clickable)
+└── logout.php
 ```
 
 ---
@@ -96,7 +100,7 @@ switch ($action) {
 ---
 
 ## Migration Pattern
-Any time a SQL change is needed, create a `run_migration.php` in the project root. It must:
+Any time a SQL change is needed, create a migration file in the `migrations/` folder. It must:
 - Require login + admin check
 - Show a confirmation screen listing what will be created/changed
 - Execute on POST with `confirm=yes`
@@ -104,7 +108,7 @@ Any time a SQL change is needed, create a `run_migration.php` in the project roo
 - Use `CREATE TABLE IF NOT EXISTS` so it's safe to run multiple times
 - Link to the relevant page on success
 
-Always present the migration file with a direct browser link: **http://localhost/run_migration.php**
+Always present the migration file with a direct browser link: **http://localhost/migrations/run_migration_xxx.php**
 
 ---
 
@@ -159,7 +163,7 @@ buildings
 ---
 
 ## Things to Always Do
-- Present any new migration file with a clickable browser link: `http://localhost/[filename].php`
+- Present any new migration file with a clickable browser link: `http://localhost/migrations/[filename].php`
 - Use `IF NOT EXISTS` on all `CREATE TABLE` statements
 - Keep all JS inline in the PHP file (no separate .js files unless asked)
 - Run `requireLogin()` at the top of every page and API file
