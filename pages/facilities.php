@@ -155,8 +155,11 @@ $fp_buildings = $buildings;
     </button>
     <button id="btn-pan" onclick="setMode('pan')" title="Pan mode">✋ Pan</button>
     <div class="tb-sep"></div>
-    <button id="btn-link"   disabled onclick="doLink()"   title="Link selected rooms across floors" style="background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.5);">⛓ Link</button>
+    <button id="btn-link"   disabled onclick="doLink()"   title="V-Link: combine rooms across floors into one virtual room" style="background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.5);">⛓ V-Link</button>
     <button id="btn-unlink" disabled onclick="doUnlink()" title="Unlink selected rooms" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4);">✂ Unlink</button>
+    <div class="tb-sep"></div>
+    <button id="btn-copy" disabled onclick="doCopy()" title="Copy selected room">📋 Copy</button>
+    <button id="btn-paste" disabled onclick="doPaste()" title="Paste room onto current floor">📌 Paste</button>
     <div style="flex:1"></div>
     <span id="floor-label" style="font-size:12px;color:rgba(255,255,255,0.6);font-style:italic;"></span>
 </div>
@@ -164,14 +167,14 @@ $fp_buildings = $buildings;
 <!-- Link-name modal -->
 <div id="link-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;align-items:center;justify-content:center;">
     <div style="background:white;border-radius:16px;padding:28px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);font-family:ui-sans-serif,system-ui,sans-serif;">
-        <h3 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">Link Rooms</h3>
+        <h3 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">V-Link Rooms</h3>
         <p id="link-modal-desc" style="font-size:12px;color:#6b7280;margin:0 0 16px;"></p>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:4px;">Shared Room Name</label>
         <input id="link-name-input" type="text" placeholder="e.g. Main Sanctuary"
                style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:14px;margin-bottom:16px;outline:none;color:#111827;box-sizing:border-box;"
                onkeydown="if(event.key==='Enter')confirmLink()">
         <div style="display:flex;gap:8px;">
-            <button onclick="confirmLink()" style="flex:1;padding:9px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Link Rooms</button>
+            <button onclick="confirmLink()" style="flex:1;padding:9px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">V-Link Rooms</button>
             <button onclick="closeLinkModal()" style="flex:1;padding:9px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>
         </div>
     </div>
@@ -303,6 +306,9 @@ let state = {
     dlgType:        null,
     pendingPolygon: null,
 };
+
+// Clipboard for room copy/paste
+let _clipboardRoom = null; // { name, abbreviation, capacity, map_points }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SVG HELPERS
@@ -919,6 +925,54 @@ async function saveRoom(room) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// COPY / PASTE
+// ─────────────────────────────────────────────────────────────────────────────
+function doCopy() {
+    const ids = [...state.selectedRoomIds];
+    if (ids.length !== 1) return;
+    const room = state.rooms.find(r => r.id === ids[0]);
+    if (!room) return;
+    _clipboardRoom = {
+        name:         room.name,
+        abbreviation: room.abbreviation || '',
+        capacity:     room.capacity,
+        map_points:   room.map_points ? JSON.parse(JSON.stringify(room.map_points)) : null
+    };
+    document.getElementById('btn-paste').disabled = false;
+    setStatus(`Copied "${room.name}" — click Paste to place it on any floor`);
+}
+
+async function doPaste() {
+    if (!_clipboardRoom || !state.floorId) return;
+    const newName = prompt('Name for the new room:', _clipboardRoom.name + ' (copy)');
+    if (!newName || !newName.trim()) return;
+    const name = newName.trim();
+    const abbr = autoAbbrev(name);
+
+    // Create the room on the current floor
+    const result = await apiPost('create_room', { floor_id: state.floorId, name, abbreviation: abbr });
+    if (result.error) { alert(result.error); return; }
+
+    // Copy map_points from clipboard to the new room
+    if (_clipboardRoom.map_points) {
+        result.map_points = JSON.parse(JSON.stringify(_clipboardRoom.map_points));
+        await apiPost('save_room', { id: result.id, map_points: result.map_points });
+    }
+    // Copy capacity if set
+    if (_clipboardRoom.capacity) {
+        result.capacity = _clipboardRoom.capacity;
+        await apiPost('save_room', { id: result.id, capacity: result.capacity });
+    }
+
+    state.rooms.push(result);
+    state.selectedRoomIds = new Set([result.id]);
+    state.activeRoomId = null;
+    facPicker.load();
+    render(); updateRoomPane();
+    setStatus(`Pasted "${name}" onto current floor`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // UTILS
 // ─────────────────────────────────────────────────────────────────────────────
 function setStatus(msg) { statusEl.textContent=msg; }
@@ -943,6 +997,10 @@ function getFieldValue(rooms, field) {
 function updateRoomPane() {
     const body=document.getElementById('room-pane-body');
     const ids=[...state.selectedRoomIds];
+    // Copy: enabled when exactly 1 room selected
+    document.getElementById('btn-copy').disabled = ids.length !== 1;
+    // Paste: enabled when clipboard has data and a floor is loaded
+    document.getElementById('btn-paste').disabled = !_clipboardRoom || !state.floorId;
     if (ids.length===0) {
         body.innerHTML=`<div id="room-pane-empty">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:48px;height:48px;margin-bottom:12px;opacity:0.35;">
@@ -954,11 +1012,31 @@ function updateRoomPane() {
         return;
     }
     const rooms=ids.map(id=>state.rooms.find(r=>r.id===id)).filter(Boolean);
+
+    // ── Detect V-Link group ──
+    // If exactly one room is selected and it belongs to a link group, show group details
+    let linkGroup = null;
+    if (ids.length === 1) {
+        linkGroup = linkedGroups.find(g => g.room_ids.includes(ids[0]));
+    }
+
     const fName=getFieldValue(rooms,'name');
     const fAbbr=getFieldValue(rooms,'abbreviation');
     const fCap =getFieldValue(rooms,'capacity');
-    const title =ids.length===1 ? escHtml(rooms[0].name) : `${ids.length} Rooms Selected`;
-    const subtitle=ids.length===1 ? 'Room' : 'Selection';
+    const fRes =getFieldValue(rooms,'is_reservable');
+    const fSto =getFieldValue(rooms,'is_storage');
+
+    let title, subtitle;
+    if (linkGroup) {
+        title    = escHtml(linkGroup.name);
+        subtitle = `V-Linked Room · ${linkGroup.room_ids.length} floors`;
+    } else if (ids.length === 1) {
+        title    = escHtml(rooms[0].name);
+        subtitle = 'Room';
+    } else {
+        title    = `${ids.length} Rooms Selected`;
+        subtitle = 'Selection';
+    }
 
     body.innerHTML=`<div style="padding:16px 20px;font-family:ui-sans-serif,system-ui,sans-serif;">
         <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#9ca3af;margin:0 0 2px;">${subtitle}</p>
@@ -993,6 +1071,28 @@ function updateRoomPane() {
                 onblur="this.style.borderColor='#d1d5db';this.style.boxShadow='none';saveParam('capacity',this.value,this.dataset.multiple)"
             >
 
+            <label class="rp-label" style="text-align:right;white-space:nowrap;">Reservable</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="rp-reservable"
+                    ${fRes.multiple ? '' : (parseInt(fRes.value) ? 'checked' : '')}
+                    ${fRes.multiple ? 'data-indeterminate="true"' : ''}
+                    onchange="saveParam('is_reservable', this.checked ? 1 : 0, '${fRes.multiple}')"
+                    style="width:16px;height:16px;accent-color:#2563eb;cursor:pointer;"
+                >
+                <span style="font-size:12px;color:#6b7280;">${fRes.multiple ? 'Mixed' : (parseInt(fRes.value) ? 'Yes' : 'No')}</span>
+            </div>
+
+            <label class="rp-label" style="text-align:right;white-space:nowrap;">Storage</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="rp-storage"
+                    ${fSto.multiple ? '' : (parseInt(fSto.value) ? 'checked' : '')}
+                    ${fSto.multiple ? 'data-indeterminate="true"' : ''}
+                    onchange="saveParam('is_storage', this.checked ? 1 : 0, '${fSto.multiple}')"
+                    style="width:16px;height:16px;accent-color:#2563eb;cursor:pointer;"
+                >
+                <span style="font-size:12px;color:#6b7280;">${fSto.multiple ? 'Mixed' : (parseInt(fSto.value) ? 'Yes' : 'No')}</span>
+            </div>
+
         </div>
     </div>`;
 }
@@ -1002,15 +1102,32 @@ async function saveParam(field, value, multipleAttr) {
     if (wasMultiple && value === '') return; // nothing changed
     if (field === 'name' && !value) return;
 
-    const ids=[...state.selectedRoomIds];
-    for (const id of ids) {
-        const room=state.rooms.find(r=>r.id===id); if(!room) continue;
-        if (field==='capacity') {
-            room[field]= value==='' ? null : parseInt(value)||0;
-        } else {
-            room[field]= value || null;
+    // Build the list of room IDs to update.
+    // If a selected room is part of a V-Link group, save to ALL rooms in that group.
+    const selectedIds = [...state.selectedRoomIds];
+    const allIds = new Set(selectedIds);
+    for (const id of selectedIds) {
+        const group = linkedGroups.find(g => g.room_ids.includes(id));
+        if (group) group.room_ids.forEach(rid => allIds.add(rid));
+    }
+
+    for (const id of allIds) {
+        // Update local state if the room is on this floor
+        const room = state.rooms.find(r => r.id === id);
+        if (room) {
+            if (field === 'capacity') {
+                room[field] = value === '' ? null : parseInt(value) || 0;
+            } else if (field === 'is_reservable' || field === 'is_storage') {
+                room[field] = value ? 1 : 0;
+            } else {
+                room[field] = value || null;
+            }
         }
-        await apiPost('save_room',{id, [field]:room[field]});
+        // Save to DB (works for rooms on other floors too)
+        const saveVal = field === 'capacity' ? (value === '' ? null : parseInt(value) || 0)
+                      : (field === 'is_reservable' || field === 'is_storage') ? (value ? 1 : 0)
+                      : (value || null);
+        await apiPost('save_room', { id, [field]: saveVal });
     }
 
     facPicker.load();
@@ -1023,7 +1140,7 @@ async function saveParam(field, value, multipleAttr) {
 setViewBox(0, 0, 80, 60);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ROOM PICKER + LINK / UNLINK
+// ROOM PICKER + V-LINK / UNLINK
 // ─────────────────────────────────────────────────────────────────────────────
 
 let linkedGroups = [];   // [{id, name, building_id, room_ids:[…]}]
@@ -1053,7 +1170,7 @@ function updateLinkButtons() {
     const btnLink = document.getElementById('btn-link');
     const btnUnlink = document.getElementById('btn-unlink');
 
-    // Link: need 2+ rooms, all from the same building, none already linked
+    // V-Link: need 2+ rooms, all from the same building, none already linked
     const buildings = [...new Set(Object.values(sel).map(r => r.building))];
     const anyLinked = ids.some(id => linkedGroups.some(g => g.room_ids.includes(id)));
     const canLink   = ids.length >= 2 && buildings.length === 1 && !anyLinked;
@@ -1065,14 +1182,14 @@ function updateLinkButtons() {
     btnUnlink.disabled = !canUnlink;
 }
 
-// ── Link flow ────────────────────────────────────────────
+// ── V-Link flow ──────────────────────────────────────────
 
 function doLink() {
     const sel  = facPicker.getSelection();
     const ids  = Object.keys(sel).map(Number);
     const names = ids.map(id => sel[id]?.name || `Room ${id}`).join(', ');
     document.getElementById('link-modal-desc').textContent =
-        `Rooms to link: ${names}`;
+        `Rooms to V-Link: ${names}`;
     document.getElementById('link-name-input').value = '';
     document.getElementById('link-modal-overlay').style.display = 'flex';
     setTimeout(() => document.getElementById('link-name-input').focus(), 50);

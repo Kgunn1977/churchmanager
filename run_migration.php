@@ -1,91 +1,112 @@
 <?php
-require_once __DIR__ . '/includes/auth.php';
-requireLogin();
-if (!isAdmin()) { http_response_code(403); exit('Admins only.'); }
+$pageTitle = 'Create Supplies & Tools Catalogs — Church Facility Manager';
+require_once __DIR__ . '/includes/nav.php';
 require_once __DIR__ . '/config/database.php';
+requireLogin();
+if (!isAdmin()) { echo '<p>Admin only.</p></body></html>'; exit; }
 $db = getDB();
-?>
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>Migration — Room Links</title>
-<style>
-body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 680px; margin: 40px auto; padding: 0 20px; background: #f8fafc; color: #1e293b; }
-h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
-.desc { font-size: 13px; color: #64748b; margin-bottom: 24px; }
-.plan { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin-bottom: 20px; }
-.plan h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin: 0 0 10px; }
-.plan ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.9; }
-.btn { display: inline-block; padding: 10px 22px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
-.btn:hover { background: #1d4ed8; }
-.result { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; }
-.ok  { color: #16a34a; font-weight: 600; }
-.err { color: #dc2626; font-weight: 600; }
-</style>
-</head><body>
-<h1>Migration — Room Links + Recurrence Exceptions</h1>
-<p class="desc">Adds room linking support and recurrence exception tracking for recurring reservations.</p>
 
-<?php if ($_SERVER['REQUEST_METHOD'] !== 'POST' || ($_POST['confirm'] ?? '') !== 'yes'): ?>
+$supplies = [
+    ['2-in-1 Cleaner/Disinfectant', 1],
+    ['Paper Towels', 1],
+    ['Trash Bags (Black)', 1],
+    ['Trash Bags (Clear)', 1],
+    ['Carpet Cleaning Solution', 1],
+    ['Glass Cleaner', 1],
+    ['Toilet Bowl Cleaner', 1],
+    ['Floor Cleaner', 1],
+    ['Barkeepers Friend', 1],
+    ['Hand Soap', 1],
+    ['Seat Covers', 1],
+];
 
-<div class="plan">
-    <h2>Changes</h2>
-    <ul>
-        <li>Create table <strong>room_links</strong> — one record per linked group (name, building_id)</li>
-        <li>Create table <strong>room_link_members</strong> — maps rooms to link groups, stores original room name for restore on unlink</li>
-        <li>Create table <strong>recurrence_exceptions</strong> — tracks deleted individual occurrences of recurring reservations</li>
-    </ul>
-</div>
+$tools = [
+    ['Broom', 1],
+    ['Mop & Bucket', 1],
+    ['Toilet Bowl Brush', 1],
+    ['Sink Brush', 1],
+    ['Shower Brush', 1],
+];
 
-<form method="post">
-    <input type="hidden" name="confirm" value="yes">
-    <button class="btn" type="submit">Run Migration</button>
-</form>
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes') {
+    echo '<div style="max-width:600px;margin:40px auto;font-family:ui-sans-serif,system-ui,sans-serif;">';
+    echo '<h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Migration Results</h2>';
 
-<?php else:
-    $statements = [
-        'Create room_links' => "
-            CREATE TABLE IF NOT EXISTS room_links (
-                id          INT AUTO_INCREMENT PRIMARY KEY,
-                name        VARCHAR(255) NOT NULL,
-                building_id INT NOT NULL,
-                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_building (building_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ",
-        'Create room_link_members' => "
-            CREATE TABLE IF NOT EXISTS room_link_members (
-                link_id       INT NOT NULL,
-                room_id       INT NOT NULL,
-                original_name VARCHAR(255) NOT NULL DEFAULT '',
-                PRIMARY KEY (link_id, room_id),
-                INDEX idx_room (room_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ",
-        'Create recurrence_exceptions' => "
-            CREATE TABLE IF NOT EXISTS recurrence_exceptions (
-                id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                reservation_id  INT UNSIGNED NOT NULL,
-                exception_date  DATE NOT NULL,
-                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uq_res_date (reservation_id, exception_date),
-                KEY idx_reservation_id (reservation_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ",
-    ];
+    // Create supplies_catalog table
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS supplies_catalog (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL UNIQUE,
+            quantity INT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        echo '<p>✅ <strong>supplies_catalog</strong> table created</p>';
+    } catch (PDOException $e) {
+        echo '<p>❌ supplies_catalog: ' . htmlspecialchars($e->getMessage()) . '</p>';
+    }
 
-    echo '<div class="result"><h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:0 0 12px;">Results</h2>';
-    $allOk = true;
-    foreach ($statements as $label => $sql) {
+    // Create tools_catalog table
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS tools_catalog (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL UNIQUE,
+            quantity INT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        echo '<p>✅ <strong>tools_catalog</strong> table created</p>';
+    } catch (PDOException $e) {
+        echo '<p>❌ tools_catalog: ' . htmlspecialchars($e->getMessage()) . '</p>';
+    }
+
+    // Seed supplies
+    echo '<h3 style="font-size:15px;font-weight:700;margin:16px 0 8px;">Supplies (' . count($supplies) . ' items)</h3>';
+    $stmt = $db->prepare("INSERT IGNORE INTO supplies_catalog (name, quantity) VALUES (?, ?)");
+    foreach ($supplies as [$name, $qty]) {
         try {
-            $db->exec($sql);
-            echo "<p class='ok'>&#10003; {$label}</p>";
+            $stmt->execute([$name, $qty]);
+            $icon = $stmt->rowCount() > 0 ? '✅' : '⚠️ exists';
+            echo "<p style='margin:2px 0;font-size:13px;'>{$icon} {$name}</p>";
         } catch (PDOException $e) {
-            echo "<p class='err'>&#10007; {$label}: " . htmlspecialchars($e->getMessage()) . "</p>";
-            $allOk = false;
+            echo "<p style='margin:2px 0;font-size:13px;'>❌ {$name}: " . htmlspecialchars($e->getMessage()) . "</p>";
         }
     }
-    if ($allOk) {
-        echo '<p style="margin-top:14px;font-size:13px;">Migration complete. <a href="/pages/facilities.php" style="color:#2563eb;">Go to Facilities &rarr;</a></p>';
+
+    // Seed tools
+    echo '<h3 style="font-size:15px;font-weight:700;margin:16px 0 8px;">Tools (' . count($tools) . ' items)</h3>';
+    $stmt = $db->prepare("INSERT IGNORE INTO tools_catalog (name, quantity) VALUES (?, ?)");
+    foreach ($tools as [$name, $qty]) {
+        try {
+            $stmt->execute([$name, $qty]);
+            $icon = $stmt->rowCount() > 0 ? '✅' : '⚠️ exists';
+            echo "<p style='margin:2px 0;font-size:13px;'>{$icon} {$name}</p>";
+        } catch (PDOException $e) {
+            echo "<p style='margin:2px 0;font-size:13px;'>❌ {$name}: " . htmlspecialchars($e->getMessage()) . "</p>";
+        }
     }
-    echo '</div>';
-endif; ?>
-</body></html>
+
+    echo '<div style="margin-top:20px;display:flex;gap:12px;">';
+    echo '<a href="/pages/supplies.php" style="color:#2563eb;font-weight:600;">→ Supplies</a>';
+    echo '<a href="/pages/tools.php" style="color:#2563eb;font-weight:600;">→ Tools</a>';
+    echo '</div></div>';
+} else {
+    echo '<div style="max-width:600px;margin:40px auto;font-family:ui-sans-serif,system-ui,sans-serif;">';
+    echo '<h2 style="font-size:18px;font-weight:700;margin-bottom:8px;">Create Supplies & Tools Catalogs</h2>';
+    echo '<p style="color:#6b7280;margin-bottom:16px;">This will create two new tables and seed them with data from the janitorial task schedule.</p>';
+
+    echo '<h3 style="font-size:14px;font-weight:700;margin:12px 0 6px;">Supplies (' . count($supplies) . ' items)</h3>';
+    echo '<ul style="font-size:13px;color:#374151;margin-bottom:12px;">';
+    foreach ($supplies as [$name, $qty]) { echo "<li>{$name}</li>"; }
+    echo '</ul>';
+
+    echo '<h3 style="font-size:14px;font-weight:700;margin:12px 0 6px;">Tools (' . count($tools) . ' items)</h3>';
+    echo '<ul style="font-size:13px;color:#374151;margin-bottom:16px;">';
+    foreach ($tools as [$name, $qty]) { echo "<li>{$name}</li>"; }
+    echo '</ul>';
+
+    echo '<form method="POST"><input type="hidden" name="confirm" value="yes">';
+    echo '<button type="submit" style="background:#2563eb;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;">Run Migration</button>';
+    echo '</form></div>';
+}
+?>
+</body>
+</html>

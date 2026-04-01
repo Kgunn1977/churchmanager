@@ -49,13 +49,21 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'equipment_catalog.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Equipment
             </a>
-            <a href="/pages/task_catalog.php"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'task_catalog.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+            <a href="/pages/tasks.php"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'tasks.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Tasks
             </a>
-            <a href="/pages/materials_catalog.php"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'materials_catalog.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+            <a href="/pages/janitor.php"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'janitor.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                Janitor
+            </a>
+            <a href="/pages/supplies.php"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'supplies.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Supplies
+            </a>
+            <a href="/pages/tools.php"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'tools.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                Tools
             </a>
             <?php if (isAdmin()): ?>
             <a href="/pages/users.php"

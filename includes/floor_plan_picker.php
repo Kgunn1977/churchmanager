@@ -197,6 +197,7 @@ class FloorPlanPicker {
         this._maxW      = opts.maxWidth     || 1200;
         this._onChange    = opts.onChange     || (() => {});
         this._onRoomClick = opts.onRoomClick  || null;
+        this._singleSelect = !!opts.singleSelect; // user clicks select only one room at a time
 
         this._rooms     = {};   // { id: {id,name,floor,building} } — selected rooms
         this._floors    = [];   // loaded [{id,name,floor_order,building_id,building_name,rooms:[]}]
@@ -247,6 +248,7 @@ class FloorPlanPicker {
         });
         this._expandLinked();
         this._render();
+        this._onChange(this._rooms);
     }
 
     /** Deselect everything. */
@@ -326,6 +328,12 @@ class FloorPlanPicker {
     _toggle(id, name, floorName, bldName) {
         const isSel = !!this._rooms[id];
         const group = this._groupFor(id);
+
+        // In single-select mode, clear all other rooms first
+        if (this._singleSelect && !isSel) {
+            this._rooms = {};
+        }
+
         if (group) {
             // Toggle the whole linked group as a unit
             if (isSel) {
@@ -347,6 +355,7 @@ class FloorPlanPicker {
     _render() {
         const list = this._paneEl.querySelector('.fp-list');
         if (!list) return;
+        const prevScroll = list.scrollTop;
         list.innerHTML = '';
 
         if (!this._floors.length) {
@@ -469,6 +478,7 @@ class FloorPlanPicker {
             }
             list.appendChild(card);
         });
+        list.scrollTop = prevScroll;
     }
 }
 

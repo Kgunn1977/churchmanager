@@ -138,40 +138,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $type = $_POST['type'] ?? '';
 
     if ($type === 'add_equipment') {
-        $eqId = (int)($_POST['equipment_id'] ?? 0);
-        $qty  = max(1, (int)($_POST['quantity'] ?? 1));
-        $note = trim($_POST['notes'] ?? '');
+        $eqId    = (int)($_POST['equipment_id'] ?? 0);
+        $qty     = max(1, (int)($_POST['quantity'] ?? 1));
+        $movable = isset($_POST['is_movable']) ? 1 : 0;
+        $note    = trim($_POST['notes'] ?? '');
         if ($eqId) {
             try {
-                $db->prepare("INSERT INTO room_equipment (room_id, equipment_id, quantity, notes) VALUES (?,?,?,?)
-                              ON DUPLICATE KEY UPDATE quantity=VALUES(quantity), notes=VALUES(notes)")
-                   ->execute([$roomId, $eqId, $qty, $note]);
+                $db->prepare("INSERT INTO room_equipment (room_id, equipment_id, quantity, is_movable, notes) VALUES (?,?,?,?,?)
+                              ON DUPLICATE KEY UPDATE quantity=VALUES(quantity), is_movable=VALUES(is_movable), notes=VALUES(notes)")
+                   ->execute([$roomId, $eqId, $qty, $movable, $note]);
             } catch (PDOException $e) {}
         }
         header("Location: /pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1"); exit;
     }
 
     if ($type === 'create_and_add_equipment') {
-        $name = trim($_POST['eq_name'] ?? '');
-        $cat  = $_POST['eq_category'] ?? 'other';
-        $desc = trim($_POST['eq_description'] ?? '');
-        $qty  = max(1, (int)($_POST['quantity'] ?? 1));
-        $note = trim($_POST['notes'] ?? '');
+        $name    = trim($_POST['eq_name'] ?? '');
+        $cat     = $_POST['eq_category'] ?? 'other';
+        $desc    = trim($_POST['eq_description'] ?? '');
+        $qty     = max(1, (int)($_POST['quantity'] ?? 1));
+        $movable = isset($_POST['is_movable']) ? 1 : 0;
+        $note    = trim($_POST['notes'] ?? '');
         if ($name) {
             $db->prepare("INSERT INTO equipment_catalog (name, description, category) VALUES (?,?,?)")->execute([$name, $desc, $cat]);
             $eqId = $db->lastInsertId();
-            $db->prepare("INSERT INTO room_equipment (room_id, equipment_id, quantity, notes) VALUES (?,?,?,?)
-                          ON DUPLICATE KEY UPDATE quantity=VALUES(quantity), notes=VALUES(notes)")
-               ->execute([$roomId, $eqId, $qty, $note]);
+            $db->prepare("INSERT INTO room_equipment (room_id, equipment_id, quantity, is_movable, notes) VALUES (?,?,?,?,?)
+                          ON DUPLICATE KEY UPDATE quantity=VALUES(quantity), is_movable=VALUES(is_movable), notes=VALUES(notes)")
+               ->execute([$roomId, $eqId, $qty, $movable, $note]);
         }
         header("Location: /pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1"); exit;
     }
 
     if ($type === 'update_equipment') {
-        $reId = (int)($_POST['re_id'] ?? 0);
-        $qty  = max(1, (int)($_POST['quantity'] ?? 1));
-        $note = trim($_POST['notes'] ?? '');
-        $db->prepare("UPDATE room_equipment SET quantity=?, notes=? WHERE id=? AND room_id=?")->execute([$qty, $note, $reId, $roomId]);
+        $reId    = (int)($_POST['re_id'] ?? 0);
+        $qty     = max(1, (int)($_POST['quantity'] ?? 1));
+        $movable = isset($_POST['is_movable']) ? 1 : 0;
+        $note    = trim($_POST['notes'] ?? '');
+        $db->prepare("UPDATE room_equipment SET quantity=?, is_movable=?, notes=? WHERE id=? AND room_id=?")->execute([$qty, $movable, $note, $reId, $roomId]);
         header("Location: /pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1"); exit;
     }
 

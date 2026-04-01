@@ -27,12 +27,14 @@ switch ($action) {
     // ── GET rooms for a floor (with map_points) ──────────────────────────────
     case 'get_rooms':
         $fid = intval($_GET['floor_id'] ?? 0);
-        $stmt = $db->prepare("SELECT id, name, abbreviation, capacity, map_points FROM rooms WHERE floor_id = ? ORDER BY name");
+        $stmt = $db->prepare("SELECT id, name, abbreviation, capacity, map_points, is_reservable, is_storage FROM rooms WHERE floor_id = ? ORDER BY name");
         $stmt->execute([$fid]);
         $rows = $stmt->fetchAll();
         foreach ($rows as &$r) {
-            $r['map_points'] = $r['map_points'] ? json_decode($r['map_points'], true) : null;
-            $r['capacity']   = $r['capacity'] !== null ? (int)$r['capacity'] : null;
+            $r['map_points']    = $r['map_points'] ? json_decode($r['map_points'], true) : null;
+            $r['capacity']      = $r['capacity'] !== null ? (int)$r['capacity'] : null;
+            $r['is_reservable'] = (int)($r['is_reservable'] ?? 1);
+            $r['is_storage']    = (int)($r['is_storage'] ?? 0);
         }
         echo json_encode($rows);
         break;
@@ -79,7 +81,7 @@ switch ($action) {
             $stmt = $db->prepare("INSERT INTO rooms (floor_id, name, abbreviation) VALUES (?, ?, ?)");
             $stmt->execute([$fid, $name, $abbr ?: null]);
             $id = (int)$db->lastInsertId();
-            echo json_encode(['id' => $id, 'name' => $name, 'abbreviation' => $abbr ?: null, 'capacity' => null, 'floor_id' => $fid, 'map_points' => null]);
+            echo json_encode(['id' => $id, 'name' => $name, 'abbreviation' => $abbr ?: null, 'capacity' => null, 'floor_id' => $fid, 'map_points' => null, 'is_reservable' => 1, 'is_storage' => 0]);
         } catch (PDOException $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
@@ -102,6 +104,14 @@ switch ($action) {
                 $params[] = strlen($capRaw) > 0 ? intval($capRaw) : null;
             }
             if (isset($input['map_points']))   { $sets[] = 'map_points = ?';   $params[] = json_encode($input['map_points']); }
+            if (array_key_exists('is_reservable', $input)) {
+                $sets[] = 'is_reservable = ?';
+                $params[] = $input['is_reservable'] ? 1 : 0;
+            }
+            if (array_key_exists('is_storage', $input)) {
+                $sets[] = 'is_storage = ?';
+                $params[] = $input['is_storage'] ? 1 : 0;
+            }
             if (empty($sets)) { echo json_encode(['success' => true]); break; }
             $params[] = $id;
             $stmt = $db->prepare("UPDATE rooms SET " . implode(', ', $sets) . " WHERE id = ?");
@@ -193,11 +203,13 @@ switch ($action) {
         );
         $floors = $stmt->fetchAll();
         foreach ($floors as &$floor) {
-            $roomStmt = $db->prepare("SELECT id, name, abbreviation, map_points FROM rooms WHERE floor_id = ? ORDER BY name");
+            $roomStmt = $db->prepare("SELECT id, name, abbreviation, map_points, is_reservable, is_storage FROM rooms WHERE floor_id = ? ORDER BY name");
             $roomStmt->execute([$floor['id']]);
             $rooms = $roomStmt->fetchAll();
             foreach ($rooms as &$r) {
-                $r['map_points'] = $r['map_points'] ? json_decode($r['map_points'], true) : null;
+                $r['map_points']    = $r['map_points'] ? json_decode($r['map_points'], true) : null;
+                $r['is_reservable'] = (int)($r['is_reservable'] ?? 1);
+            $r['is_storage']    = (int)($r['is_storage'] ?? 0);
             }
             $floor['rooms'] = $rooms;
         }
@@ -216,11 +228,13 @@ switch ($action) {
         $floorStmt->execute([$bid]);
         $floors = $floorStmt->fetchAll();
         foreach ($floors as &$floor) {
-            $roomStmt = $db->prepare("SELECT id, name, abbreviation, map_points FROM rooms WHERE floor_id = ? ORDER BY name");
+            $roomStmt = $db->prepare("SELECT id, name, abbreviation, map_points, is_reservable, is_storage FROM rooms WHERE floor_id = ? ORDER BY name");
             $roomStmt->execute([$floor['id']]);
             $rooms = $roomStmt->fetchAll();
             foreach ($rooms as &$r) {
-                $r['map_points'] = $r['map_points'] ? json_decode($r['map_points'], true) : null;
+                $r['map_points']    = $r['map_points'] ? json_decode($r['map_points'], true) : null;
+                $r['is_reservable'] = (int)($r['is_reservable'] ?? 1);
+            $r['is_storage']    = (int)($r['is_storage'] ?? 0);
             }
             $floor['rooms'] = $rooms;
         }

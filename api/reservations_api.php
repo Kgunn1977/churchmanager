@@ -135,7 +135,7 @@ switch ($action) {
     case 'get_rooms':
         $fid = (int)($_GET['floor_id'] ?? 0);
         if (!$fid) { echo json_encode([]); exit; }
-        $stmt = $db->prepare("SELECT id, name, room_number FROM rooms WHERE floor_id = ? ORDER BY room_number, name");
+        $stmt = $db->prepare("SELECT id, name, room_number FROM rooms WHERE floor_id = ? AND is_reservable = 1 ORDER BY room_number, name");
         $stmt->execute([$fid]);
         echo json_encode($stmt->fetchAll());
         break;
