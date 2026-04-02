@@ -37,9 +37,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'reservations.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Reservations
             </a>
-            <a href="#"
-               class="px-3 py-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-blue-700 transition">
-                Cleaning
+            <a href="/pages/janitor.php"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'janitor.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                Janitor
+            </a>
+            <a href="/pages/scheduling.php"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'scheduling.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                Scheduling
             </a>
             <a href="#"
                class="px-3 py-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-blue-700 transition">
@@ -53,22 +57,26 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'tasks.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Tasks
             </a>
-            <a href="/pages/janitor.php"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'janitor.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Janitor
-            </a>
-            <a href="/pages/supplies.php"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'supplies.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+            <a href="/pages/catalog.php?type=supplies"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'supplies' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Supplies
             </a>
-            <a href="/pages/tools.php"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'tools.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+            <a href="/pages/catalog.php?type=tools"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'tools' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Tools
+            </a>
+            <a href="/pages/catalog.php?type=materials"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'materials' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                Materials
             </a>
             <?php if (isAdmin()): ?>
             <a href="/pages/users.php"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'users.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Users
+            </a>
+            <a href="/pages/settings.php"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'settings.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                Settings
             </a>
             <?php endif; ?>
         </div>
@@ -91,3 +99,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
     </div>
 </nav>
+
+<script>
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>

@@ -402,50 +402,8 @@ function render() {
 }
 
 function pointsAttr(pts) { return pts.map(([x,y]) => `${x},${y}`).join(' '); }
-// Pole of inaccessibility — point furthest from all edges (Mapbox polylabel algorithm).
-// Produces labels that stay visually inside irregular/concave room shapes.
-function polyCenter(pts) {
-    let mnX=Infinity,mnY=Infinity,mxX=-Infinity,mxY=-Infinity;
-    for (const [x,y] of pts) { mnX=Math.min(mnX,x);mnY=Math.min(mnY,y);mxX=Math.max(mxX,x);mxY=Math.max(mxY,y); }
-    const h0=Math.min(mxX-mnX,mxY-mnY)/2;
-    if (!h0) return [(mnX+mxX)/2,(mnY+mxY)/2];
-    const prec=h0/16;
-    const heap=[];
-    const _hpush=c=>{
-        heap.push(c); let i=heap.length-1;
-        while(i>0){const p=(i-1)>>1;if(heap[p][4]>=heap[i][4])break;[heap[p],heap[i]]=[heap[i],heap[p]];i=p;}
-    };
-    const _hpop=()=>{
-        const top=heap[0],last=heap.pop();
-        if(heap.length){heap[0]=last;let i=0;
-            for(;;){let j=2*i+1;if(j>=heap.length)break;
-                if(j+1<heap.length&&heap[j+1][4]>heap[j][4])j++;
-                if(heap[i][4]>=heap[j][4])break;[heap[i],heap[j]]=[heap[j],heap[i]];i=j;}}
-        return top;
-    };
-    const _dist=(px,py)=>{
-        let inside=false,minD=Infinity;
-        for(let i=0,j=pts.length-1;i<pts.length;j=i++){
-            const[xi,yi]=pts[i],[xj,yj]=pts[j];
-            if((yi>py)!==(yj>py)&&px<(xj-xi)*(py-yi)/(yj-yi)+xi)inside=!inside;
-            const dx=xj-xi,dy=yj-yi,t=Math.max(0,Math.min(1,((px-xi)*dx+(py-yi)*dy)/(dx*dx+dy*dy||1)));
-            const ex=xi+t*dx-px,ey=yi+t*dy-py;minD=Math.min(minD,ex*ex+ey*ey);
-        }
-        return(inside?1:-1)*Math.sqrt(minD);
-    };
-    const _cell=(x,y,h)=>{const d=_dist(x,y);return[x,y,h,d,d+h*1.4142];};
-    for(let x=mnX+h0;x<mxX;x+=h0*2)for(let y=mnY+h0;y<mxY;y+=h0*2)_hpush(_cell(x,y,h0));
-    let bx=(mnX+mxX)/2,by=(mnY+mxY)/2,bd=_dist(bx,by);
-    while(heap.length){
-        const[cx,cy,h,d,pot]=_hpop();
-        if(d>bd){bd=d;bx=cx;by=cy;}
-        if(pot-bd<=prec)continue;
-        const h2=h/2;
-        _hpush(_cell(cx-h2,cy-h2,h2));_hpush(_cell(cx+h2,cy-h2,h2));
-        _hpush(_cell(cx-h2,cy+h2,h2));_hpush(_cell(cx+h2,cy+h2,h2));
-    }
-    return[bx,by];
-}
+// polyCenter — uses _fpCenter from floor_plan_picker.php (polylabel algorithm)
+function polyCenter(pts) { return _fpCenter(pts); }
 
 function renderRoom(room) {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -1205,9 +1163,6 @@ async function confirmLink() {
 
     const sel        = facPicker.getSelection();
     const ids        = Object.keys(sel).map(Number);
-    const buildingId = Object.values(sel)[0]?.building
-        // building name isn't enough — get building_id from pane floor data
-        ? null : null;
 
     // Get building_id from the picker's internal floor data
     const bldId = facPicker._floors

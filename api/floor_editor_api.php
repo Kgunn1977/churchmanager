@@ -5,8 +5,12 @@ require_once __DIR__ . '/../config/database.php';
 header('Content-Type: application/json');
 
 $db     = getDB();
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
-$input  = json_decode(file_get_contents('php://input'), true) ?? [];
+// Normalise: if the request body is JSON, populate $_POST so all APIs work uniformly
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST)) {
+    $_POST = json_decode(file_get_contents('php://input'), true) ?: [];
+}
+$input  = $_POST;   // alias kept — this file reads $input throughout
+$action = $_GET['action'] ?? $input['action'] ?? '';
 
 switch ($action) {
 

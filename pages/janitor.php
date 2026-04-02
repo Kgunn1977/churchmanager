@@ -4,6 +4,11 @@ require_once __DIR__ . '/../includes/nav.php';
 require_once __DIR__ . '/../config/database.php';
 $db = getDB();
 $user = getCurrentUser();
+$canPickWorker = in_array($user['role'], ['admin', 'scheduler']);
+$workers = [];
+if ($canPickWorker) {
+    $workers = $db->query("SELECT id, name, role FROM users WHERE is_active = 1 ORDER BY name")->fetchAll();
+}
 ?>
 
 <style>
@@ -71,6 +76,17 @@ $user = getCurrentUser();
 .j-check-item.done .j-check-label { text-decoration:line-through; color:#9ca3af; }
 .j-check-time { font-size:11px; color:#9ca3af; }
 
+/* ── Sub-groups ───────────────────────────────────────── */
+.j-subgroup { margin-bottom:4px; }
+.j-subgroup-hdr {
+    display:flex; align-items:center; gap:8px; padding:8px 0 4px;
+    cursor:pointer; user-select:none; font-size:13px; font-weight:700; color:#374151;
+}
+.j-subgroup-hdr:hover { color:#1e40af; }
+.j-subgroup-body { display:none; margin-left:22px; }
+.j-subgroup.open > .j-subgroup-body { display:block; }
+.j-subgroup.open > .j-subgroup-hdr .j-expand-icon { transform:rotate(90deg); }
+
 /* ── Summary bar ───────────────────────────────────────── */
 .j-summary {
     display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;
@@ -90,6 +106,20 @@ $user = getCurrentUser();
 </style>
 
 <div class="j-container">
+
+    <?php if ($canPickWorker): ?>
+    <!-- Worker selector (admin/scheduler only) -->
+    <div style="margin-bottom:12px;">
+        <select id="j-worker" onchange="loadAssignments()"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <?php foreach ($workers as $w): ?>
+                <option value="<?= (int)$w['id'] ?>" <?= $w['id'] == $user['id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($w['name']) ?> (<?= htmlspecialchars($w['role']) ?>)
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <?php endif; ?>
 
     <!-- Date bar -->
     <div class="j-date-bar">
@@ -119,7 +149,16 @@ $user = getCurrentUser();
 </div>
 
 <script>
-const userId = <?= (int)$user['id'] ?>;
+const defaultUserId = <?= (int)$user['id'] ?>;
+const canPickWorker = <?= $canPickWorker ? 'true' : 'false' ?>;
+
+function getActiveUserId() {
+    if (canPickWorker) {
+        const sel = document.getElementById('j-worker');
+        return sel ? parseInt(sel.value) : defaultUserId;
+    }
+    return defaultUserId;
+}
 
 // ═══════════════════════════════════════════════════════════
 // DATE
@@ -144,7 +183,7 @@ document.getElementById('j-date').value = fmtDate(new Date());
 // ═══════════════════════════════════════════════════════════
 function loadAssignments() {
     const date = document.getElementById('j-date').value;
-    fetch(`/api/tasks_api.php?action=get_janitor_assignments&date=${date}&user_id=${userId}`)
+    fetch(`/api/tasks_api.php?action=get_janitor_assignments&date=${date}&user_id=${getActiveUserId()}`)
         .then(r => r.json())
         .then(assignments => {
             renderSummary(assignments);
@@ -153,11 +192,16 @@ function loadAssignments() {
 }
 
 function renderSummary(assignments) {
-    const total     = assignments.length;
-    const completed = assignments.filter(a => a.status === 'completed').length;
-    const pending   = total - completed;
+    // Count individual checklist items, not group-level assignments
+    let total = 0, completed = 0;
+    assignments.forEach(a => {
+        const items = a.checklist || [];
+        total += items.length;
+        completed += items.filter(c => c.completed == 1).length;
+    });
+    const pending = total - completed;
     document.getElementById('j-summary').innerHTML = `
-        <div class="j-stat"><div class="j-stat-num">${total}</div><div class="j-stat-label">Total</div></div>
+        <div class="j-stat"><div class="j-stat-num">${total}</div><div class="j-stat-label">Tasks</div></div>
         <div class="j-stat"><div class="j-stat-num" style="color:#22c55e;">${completed}</div><div class="j-stat-label">Done</div></div>
         <div class="j-stat"><div class="j-stat-num" style="color:#f59e0b;">${pending}</div><div class="j-stat-label">Remaining</div></div>
     `;
@@ -184,6 +228,65 @@ function renderList(assignments) {
         card.className = 'j-card' + (isComplete ? ' completed' : '');
         card.id = 'assignment-' + a.id;
 
+        // Build checklist HTML — group by sub_group_name if present
+        let checklistHtml = '';
+        const subGroups = {};
+        const ungrouped = [];
+        checklist.forEach(c => {
+            if (c.sub_group_name) {
+                if (!subGroups[c.sub_group_name]) subGroups[c.sub_group_name] = [];
+                subGroups[c.sub_group_name].push(c);
+            } else {
+                ungrouped.push(c);
+            }
+        });
+
+        const sgNames = Object.keys(subGroups);
+        if (sgNames.length > 0) {
+            // Render sub-groups with expand/collapse
+            sgNames.forEach((sgName, idx) => {
+                const sgItems = subGroups[sgName];
+                const sgDone = sgItems.filter(c => c.completed == 1).length;
+                const sgAllDone = sgDone === sgItems.length;
+                checklistHtml += `
+                    <div class="j-subgroup" data-sg-name="${esc(sgName)}">
+                        <div class="j-subgroup-hdr" onclick="toggleSubGroup(this.parentElement)">
+                            <svg class="j-expand-icon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                            <span style="flex:1;">${esc(sgName)}</span>
+                            <span style="font-size:11px;color:${sgAllDone ? '#22c55e' : '#9ca3af'};font-weight:600;">${sgDone}/${sgItems.length}</span>
+                        </div>
+                        <div class="j-subgroup-body">
+                            ${sgItems.map(c => `
+                                <div class="j-check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}">
+                                    <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
+                                           onchange="toggleCheck(${a.id}, ${c.task_id}, this.checked)">
+                                    <span class="j-check-label">${esc(c.task_name)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+            });
+        }
+
+        // Ungrouped items (or all items if no sub-groups)
+        if (ungrouped.length > 0 || sgNames.length === 0) {
+            const items = ungrouped.length > 0 ? ungrouped : (sgNames.length === 0 ? checklist : []);
+            items.forEach(c => {
+                checklistHtml += `
+                    <div class="j-check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}">
+                        <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
+                               onchange="toggleCheck(${a.id}, ${c.task_id}, this.checked)">
+                        <span class="j-check-label">${esc(c.task_name)}</span>
+                    </div>`;
+            });
+        }
+
+        if (!checklist.length) {
+            checklistHtml = '<div style="font-size:12px;color:#9ca3af;padding:8px 0;">No checklist items</div>';
+        }
+
         card.innerHTML = `
             <div class="j-card-hdr" onclick="toggleCard(${a.id})">
                 <svg class="j-expand-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -197,18 +300,11 @@ function renderList(assignments) {
                 <div style="text-align:right;">
                     <div class="j-type-badge">${esc(a.type_name)}</div>
                     <div class="j-time-badge" style="margin-top:4px;">${a.estimated_minutes} min</div>
-                    <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${doneCount}/${checklist.length}</div>
+                    <div class="j-done-count" style="font-size:11px;color:#9ca3af;margin-top:4px;">${doneCount}/${checklist.length}</div>
                 </div>
             </div>
             <div class="j-card-body">
-                ${checklist.map(c => `
-                    <div class="j-check-item${c.completed == 1 ? ' done' : ''}">
-                        <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
-                               onchange="toggleCheck(${a.id}, ${c.task_id}, this.checked)">
-                        <span class="j-check-label">${esc(c.task_name)}</span>
-                    </div>
-                `).join('')}
-                ${!checklist.length ? '<div style="font-size:12px;color:#9ca3af;padding:8px 0;">No checklist items</div>' : ''}
+                ${checklistHtml}
             </div>
         `;
         list.appendChild(card);
@@ -231,7 +327,21 @@ function formatDeadline(dt) {
 // INTERACTIONS
 // ═══════════════════════════════════════════════════════════
 function toggleCard(assignmentId) {
-    document.getElementById('assignment-' + assignmentId).classList.toggle('open');
+    const card = document.getElementById('assignment-' + assignmentId);
+    const wasOpen = card.classList.contains('open');
+    card.classList.toggle('open');
+
+    // Auto-expand only the first sub-group when opening
+    if (!wasOpen) {
+        const firstSubGroup = card.querySelector('.j-subgroup');
+        if (firstSubGroup && !firstSubGroup.classList.contains('open')) {
+            firstSubGroup.classList.add('open');
+        }
+    }
+}
+
+function toggleSubGroup(el) {
+    el.classList.toggle('open');
 }
 
 function toggleCheck(assignmentId, taskId, checked) {
@@ -243,12 +353,71 @@ function toggleCheck(assignmentId, taskId, checked) {
     fetch('/api/tasks_api.php', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(r => {
-            if (r.success) loadAssignments();
+            if (!r.success) return;
+
+            // Update UI in-place instead of reloading (prevents collapse)
+            const card = document.getElementById('assignment-' + assignmentId);
+            if (!card) { loadAssignments(); return; }
+
+            // Update the checkbox item
+            const item = card.querySelector(`.j-check-item[data-task-id="${taskId}"]`);
+            if (item) {
+                const cb = item.querySelector('input[type=checkbox]');
+                cb.checked = checked;
+                item.classList.toggle('done', checked);
+            }
+
+            // Update the count display
+            const allItems = card.querySelectorAll('.j-check-item');
+            const doneItems = card.querySelectorAll('.j-check-item.done');
+            const countEl = card.querySelector('.j-done-count');
+            if (countEl) countEl.textContent = `${doneItems.length}/${allItems.length}`;
+
+            // Update card completed state
+            if (r.assignment_status === 'completed') {
+                card.classList.add('completed');
+            } else {
+                card.classList.remove('completed');
+            }
+
+            // Update summary bar
+            updateSummaryInPlace();
+
+            // Auto-expand next subgroup if all tasks in current subgroup are done
+            if (checked && item) {
+                const subgroup = item.closest('.j-subgroup');
+                if (subgroup) {
+                    const sgItems = subgroup.querySelectorAll('.j-check-item');
+                    const sgDone  = subgroup.querySelectorAll('.j-check-item.done');
+                    if (sgItems.length > 0 && sgItems.length === sgDone.length) {
+                        // Collapse finished subgroup
+                        subgroup.classList.remove('open');
+                        // Open the next sibling subgroup
+                        let next = subgroup.nextElementSibling;
+                        while (next && !next.classList.contains('j-subgroup')) {
+                            next = next.nextElementSibling;
+                        }
+                        if (next && !next.classList.contains('open')) {
+                            next.classList.add('open');
+                        }
+                    }
+                }
+            }
         });
 }
 
-function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function updateSummaryInPlace() {
+    let total = 0, completed = 0;
+    document.querySelectorAll('.j-check-item').forEach(el => {
+        total++;
+        if (el.classList.contains('done')) completed++;
+    });
+    const pending = total - completed;
+    document.getElementById('j-summary').innerHTML = `
+        <div class="j-stat"><div class="j-stat-num">${total}</div><div class="j-stat-label">Tasks</div></div>
+        <div class="j-stat"><div class="j-stat-num" style="color:#22c55e;">${completed}</div><div class="j-stat-label">Done</div></div>
+        <div class="j-stat"><div class="j-stat-num" style="color:#f59e0b;">${pending}</div><div class="j-stat-label">Remaining</div></div>
+    `;
 }
 
 // ═══════════════════════════════════════════════════════════

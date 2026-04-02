@@ -1,5 +1,21 @@
 <?php
-$pageTitle = 'Tools — Church Facility Manager';
+$type = $_GET['type'] ?? 'supplies';
+if (!in_array($type, ['supplies', 'tools', 'materials'])) {
+    $type = 'supplies';
+}
+
+$typeNames = [
+    'supplies' => 'Supplies',
+    'tools' => 'Tools',
+    'materials' => 'Materials'
+];
+$typeDescriptions = [
+    'supplies' => 'Consumable items used in cleaning and maintenance tasks.',
+    'tools' => 'Reusable tools used in cleaning and maintenance tasks.',
+    'materials' => 'Raw materials and components for facility repairs and projects.'
+];
+
+$pageTitle = $typeNames[$type] . ' — Church Facility Manager';
 require_once __DIR__ . '/../includes/nav.php';
 require_once __DIR__ . '/../config/database.php';
 requireRole(['admin', 'scheduler']);
@@ -8,6 +24,9 @@ $db = getDB();
 
 <style>
 .cat-page { max-width: 640px; margin: 0 auto; padding: 32px 16px; font-family: ui-sans-serif, system-ui, sans-serif; }
+.cat-tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
+.cat-tab { padding: 8px 16px; font-size: 14px; font-weight: 600; color: #6b7280; border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.cat-tab.active { color: #2563eb; border-bottom-color: #2563eb; }
 .cat-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
 .cat-hdr h1 { font-size: 22px; font-weight: 700; color: #111827; margin: 0; }
 .cat-hdr p { font-size: 13px; color: #6b7280; margin: 4px 0 0; }
@@ -22,7 +41,6 @@ $db = getDB();
 .cat-row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .cat-row-actions button { background: none; border: none; cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
 .cat-row-actions .edit-btn { color: #2563eb; } .cat-row-actions .edit-btn:hover { background: #eff6ff; }
-.cat-row-actions .del-btn { color: #dc2626; } .cat-row-actions .del-btn:hover { background: #fef2f2; }
 .cat-hdr-row { display: grid; grid-template-columns: 1fr 80px 64px; padding: 8px 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; background: #fafafa; }
 .cat-empty { padding: 40px 20px; text-align: center; color: #9ca3af; }
 .cat-count { font-size: 12px; color: #9ca3af; text-align: center; margin-top: 12px; }
@@ -40,14 +58,20 @@ $db = getDB();
 </style>
 
 <div class="cat-page">
+    <div class="cat-tabs">
+        <a href="?type=supplies" class="cat-tab <?php echo $type === 'supplies' ? 'active' : ''; ?>">Supplies</a>
+        <a href="?type=tools" class="cat-tab <?php echo $type === 'tools' ? 'active' : ''; ?>">Tools</a>
+        <a href="?type=materials" class="cat-tab <?php echo $type === 'materials' ? 'active' : ''; ?>">Materials</a>
+    </div>
+
     <div class="cat-hdr">
         <div>
-            <h1>Tools</h1>
-            <p>Reusable tools used in cleaning and maintenance tasks.</p>
+            <h1><?php echo htmlspecialchars($typeNames[$type]); ?></h1>
+            <p><?php echo htmlspecialchars($typeDescriptions[$type]); ?></p>
         </div>
         <button class="cat-add-btn" onclick="openModal()">
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Add Tool
+            <span id="add-btn-text">Add</span>
         </button>
     </div>
     <div class="cat-list" id="cat-list"></div>
@@ -56,11 +80,11 @@ $db = getDB();
 
 <div class="cat-modal" id="catModal">
     <div class="cat-modal-inner">
-        <h3 id="modal-title">Add Tool</h3>
+        <h3 id="modal-title">Add</h3>
         <input type="hidden" id="modal-id">
         <div style="margin-bottom:12px;">
             <label>Name *</label>
-            <input id="modal-name" type="text" placeholder="e.g. Broom">
+            <input id="modal-name" type="text" placeholder="">
         </div>
         <div style="margin-bottom:4px;">
             <label>Quantity</label>
@@ -70,21 +94,37 @@ $db = getDB();
             <button class="btn-save" onclick="saveItem()">Save</button>
             <button class="btn-cancel" onclick="closeModal()">Cancel</button>
         </div>
-        <button class="btn-delete" id="modal-del" onclick="deleteItem()" style="display:none;">Delete Tool</button>
+        <button class="btn-delete" id="modal-del" onclick="deleteItem()" style="display:none;">Delete</button>
     </div>
 </div>
 
 <script>
 let items = [];
+let currentType = '<?php echo $type; ?>';
+const typeNames = {
+    'supplies': 'Supply',
+    'tools': 'Tool',
+    'materials': 'Material'
+};
+const typePlurals = {
+    'supplies': 'supply item',
+    'tools': 'tool',
+    'materials': 'material'
+};
+const typePluralForms = {
+    'supplies': 'supply items',
+    'tools': 'tools',
+    'materials': 'materials'
+};
 
 async function apiGet(action) {
-    const r = await fetch('/api/tools_api.php?action=' + action);
+    const r = await fetch('/api/catalog_api.php?action=' + action + '&type=' + currentType);
     return r.json();
 }
 async function apiPost(action, data) {
-    const r = await fetch('/api/tools_api.php', {
+    const r = await fetch('/api/catalog_api.php', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ action, ...data })
+        body: JSON.stringify({ action, type: currentType, ...data })
     });
     return r.json();
 }
@@ -97,7 +137,8 @@ async function load() {
 function render() {
     const el = document.getElementById('cat-list');
     if (!items.length) {
-        el.innerHTML = '<div class="cat-empty"><p style="font-size:14px;font-weight:500;">No tools yet</p><p style="font-size:12px;">Click "+ Add Tool" to get started</p></div>';
+        const plural = typePluralForms[currentType];
+        el.innerHTML = '<div class="cat-empty"><p style="font-size:14px;font-weight:500;">No ' + plural + ' yet</p><p style="font-size:12px;">Click "+ Add ' + typeNames[currentType] + '" to get started</p></div>';
         document.getElementById('cat-count').textContent = '';
         return;
     }
@@ -112,16 +153,20 @@ function render() {
         </div>
     `).join('');
     el.innerHTML = html;
-    document.getElementById('cat-count').textContent = items.length + ' tool' + (items.length !== 1 ? 's' : '');
+    const plural = items.length !== 1 ? typePluralForms[currentType] : typePlurals[currentType];
+    document.getElementById('cat-count').textContent = items.length + ' ' + plural;
 }
 
 function openModal(id) {
     const item = id ? items.find(i => i.id === id) : null;
-    document.getElementById('modal-title').textContent = item ? 'Edit Tool' : 'Add Tool';
+    const typeName = typeNames[currentType];
+    document.getElementById('modal-title').textContent = item ? 'Edit ' + typeName : 'Add ' + typeName;
     document.getElementById('modal-id').value = item ? item.id : '';
     document.getElementById('modal-name').value = item ? item.name : '';
     document.getElementById('modal-qty').value = item ? item.quantity : 1;
+    document.getElementById('modal-del').textContent = 'Delete ' + typeName;
     document.getElementById('modal-del').style.display = item ? 'block' : 'none';
+    document.getElementById('modal-name').placeholder = 'e.g. ' + (currentType === 'supplies' ? 'Paper Towels' : currentType === 'tools' ? 'Broom' : 'Wood Screws');
     document.getElementById('catModal').style.display = 'flex';
     setTimeout(() => document.getElementById('modal-name').focus(), 50);
 }
@@ -144,7 +189,8 @@ async function saveItem() {
 
 async function deleteItem() {
     const id = document.getElementById('modal-id').value;
-    if (!id || !confirm('Delete this tool?')) return;
+    const typeName = typeNames[currentType];
+    if (!id || !confirm('Delete this ' + typeName.toLowerCase() + '?')) return;
     await apiPost('delete', { id: parseInt(id) });
     closeModal();
     load();

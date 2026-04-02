@@ -1,7 +1,8 @@
 <?php
+// Copy this file to database.php and fill in your credentials
 define('DB_HOST', '127.0.0.1');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_USER', 'your_db_user');
+define('DB_PASS', 'your_db_password');
 define('DB_NAME', 'facilitymanager');
 
 function getDB() {

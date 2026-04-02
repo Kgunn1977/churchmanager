@@ -12,11 +12,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST)) {
     $input = $_POST;
 }
 $action = $_GET['action'] ?? $input['action'] ?? '';
+$type   = $_GET['type'] ?? $input['type'] ?? '';
+
+// Validate type parameter
+$valid_types = ['supplies', 'tools', 'materials'];
+if (!in_array($type, $valid_types)) {
+    echo json_encode(['error' => 'Invalid type. Must be one of: supplies, tools, materials']);
+    exit;
+}
 
 switch ($action) {
 
     case 'get_all':
-        $rows = $db->query("SELECT * FROM tools_catalog ORDER BY name")->fetchAll();
+        $rows = $db->query("SELECT * FROM {$type} ORDER BY name")->fetchAll();
         foreach ($rows as &$r) {
             $r['id']       = (int)$r['id'];
             $r['quantity'] = (int)$r['quantity'];
@@ -29,7 +37,7 @@ switch ($action) {
         $qty  = max(1, (int)($input['quantity'] ?? 1));
         if (!$name) { echo json_encode(['error' => 'Name required']); break; }
         try {
-            $db->prepare("INSERT INTO tools_catalog (name, quantity) VALUES (?,?)")->execute([$name, $qty]);
+            $db->prepare("INSERT INTO {$type} (name, quantity) VALUES (?,?)")->execute([$name, $qty]);
             echo json_encode(['success' => true, 'id' => (int)$db->lastInsertId()]);
         } catch (PDOException $e) {
             echo json_encode(['error' => $e->getMessage()]);
@@ -42,7 +50,7 @@ switch ($action) {
         $qty  = max(1, (int)($input['quantity'] ?? 1));
         if (!$id || !$name) { echo json_encode(['error' => 'id and name required']); break; }
         try {
-            $db->prepare("UPDATE tools_catalog SET name=?, quantity=? WHERE id=?")->execute([$name, $qty, $id]);
+            $db->prepare("UPDATE {$type} SET name=?, quantity=? WHERE id=?")->execute([$name, $qty, $id]);
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
             echo json_encode(['error' => $e->getMessage()]);
@@ -53,7 +61,7 @@ switch ($action) {
         $id = (int)($input['id'] ?? 0);
         if (!$id) { echo json_encode(['error' => 'id required']); break; }
         try {
-            $db->prepare("DELETE FROM tools_catalog WHERE id=?")->execute([$id]);
+            $db->prepare("DELETE FROM {$type} WHERE id=?")->execute([$id]);
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
             echo json_encode(['error' => $e->getMessage()]);

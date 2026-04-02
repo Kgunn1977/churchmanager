@@ -7,3 +7,16 @@
 .DS_Store
 Thumbs.db
 desktop.ini
+~$*
+
+# Config with credentials (keep a template instead)
+/config/database.php
+
+# Claude project files
+/.claude/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -604,9 +604,6 @@ function refreshAfterRoomChange() {
     if (S.date) loadRes(S.date);
 }
 
-// Legacy alias kept for any stray call sites
-function renderFloorPane() { picker.refresh(); }
-
 // ═══════════════════════════════════════════════════════════
 // CALENDAR
 // ═══════════════════════════════════════════════════════════
@@ -1217,9 +1214,6 @@ function postApi(formData) {
 }
 function fmtDate(d) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ═══════════════════════════════════════════════════════════

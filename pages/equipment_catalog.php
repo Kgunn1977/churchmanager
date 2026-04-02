@@ -663,7 +663,6 @@ const eqPicker = new FloorPlanPicker({
 // ═══════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // Close modals on backdrop click
 document.getElementById('addCatModal').addEventListener('click', e => { if (e.target === document.getElementById('addCatModal')) closeCatModal(); });

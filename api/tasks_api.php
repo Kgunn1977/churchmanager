@@ -6,6 +6,10 @@ require_once __DIR__ . '/../config/database.php';
 header('Content-Type: application/json');
 
 $db     = getDB();
+// Normalise: if the request body is JSON, populate $_POST so downstream code works uniformly
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST)) {
+    $_POST = json_decode(file_get_contents('php://input'), true) ?: [];
+}
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 switch ($action) {
@@ -127,11 +131,13 @@ switch ($action) {
         $typeId   = (int)($_GET['task_type_id'] ?? 0);
         $workerId = (int)($_GET['worker_id'] ?? 0);
         $q        = trim($_GET['q'] ?? '');
+        $reusableOnly = isset($_GET['reusable']) ? (int)$_GET['reusable'] : -1; // -1 = no filter
         $where  = [];
         $params = [];
         if ($typeId)   { $where[] = 't.task_type_id = ?'; $params[] = $typeId; }
         if ($q !== '') { $where[] = 't.name LIKE ?'; $params[] = '%' . $q . '%'; }
         if ($workerId) { $where[] = 't.id IN (SELECT tpw.task_id FROM task_preferred_workers tpw WHERE tpw.user_id = ?)'; $params[] = $workerId; }
+        if ($reusableOnly >= 0) { $where[] = 't.reusable = ?'; $params[] = $reusableOnly; }
         $whereStr = $where ? 'WHERE ' . implode(' AND ', $where) : '';
         $stmt = $db->prepare("
             SELECT t.*, tt.name AS type_name
@@ -207,14 +213,15 @@ switch ($action) {
         $desc     = trim($_POST['description'] ?? '') ?: null;
         $typeId   = (int)($_POST['task_type_id'] ?? 0);
         $estMins  = (int)($_POST['estimated_minutes'] ?? 5);
+        $reusable = isset($_POST['reusable']) ? (int)$_POST['reusable'] : 1;
         if (!$name || !$typeId) { echo json_encode(['error' => 'Name and type are required']); exit; }
 
         if ($id) {
-            $stmt = $db->prepare("UPDATE tasks SET name=?, description=?, task_type_id=?, estimated_minutes=? WHERE id=?");
-            $stmt->execute([$name, $desc, $typeId, $estMins, $id]);
+            $stmt = $db->prepare("UPDATE tasks SET name=?, description=?, task_type_id=?, estimated_minutes=?, reusable=? WHERE id=?");
+            $stmt->execute([$name, $desc, $typeId, $estMins, $reusable, $id]);
         } else {
-            $stmt = $db->prepare("INSERT INTO tasks (name, description, task_type_id, estimated_minutes) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$name, $desc, $typeId, $estMins]);
+            $stmt = $db->prepare("INSERT INTO tasks (name, description, task_type_id, estimated_minutes, reusable) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $desc, $typeId, $estMins, $reusable]);
             $id = (int)$db->lastInsertId();
         }
 
@@ -351,30 +358,46 @@ switch ($action) {
     // ═══════════════════════════════════════════════════════════
 
     case 'get_task_groups':
-        $typeId   = (int)($_GET['task_type_id'] ?? 0);
-        $workerId = (int)($_GET['worker_id'] ?? 0);
-        $q        = trim($_GET['q'] ?? '');
+        $typeId    = (int)($_GET['task_type_id'] ?? 0);
+        $workerId  = (int)($_GET['worker_id'] ?? 0);
+        $q         = trim($_GET['q'] ?? '');
+        $flat      = (int)($_GET['flat'] ?? 0);       // 1 = return flat list (no hierarchy)
+        $parentId  = isset($_GET['parent_id']) ? ($_GET['parent_id'] === '' ? 'top' : (int)$_GET['parent_id']) : null;
         $where  = [];
         $params = [];
         if ($typeId)   { $where[] = 'tg.task_type_id = ?'; $params[] = $typeId; }
         if ($q !== '') { $where[] = 'tg.name LIKE ?'; $params[] = '%' . $q . '%'; }
         if ($workerId) { $where[] = 'tg.id IN (SELECT tgpw.task_group_id FROM task_group_preferred_workers tgpw WHERE tgpw.user_id = ?)'; $params[] = $workerId; }
+        if ($parentId === 'top') { $where[] = 'tg.parent_id IS NULL'; }
+        elseif ($parentId !== null) { $where[] = 'tg.parent_id = ?'; $params[] = $parentId; }
         $whereStr = $where ? 'WHERE ' . implode(' AND ', $where) : '';
         $stmt = $db->prepare("
             SELECT tg.*, tt.name AS type_name,
-                   (SELECT COUNT(*) FROM task_group_tasks tgt WHERE tgt.task_group_id = tg.id) AS task_count
+                   (SELECT COUNT(*) FROM task_group_tasks tgt WHERE tgt.task_group_id = tg.id) AS task_count,
+                   (SELECT COUNT(*) FROM task_groups tg2 WHERE tg2.parent_id = tg.id) AS child_group_count
             FROM task_groups tg
             JOIN task_types tt ON tt.id = tg.task_type_id
             {$whereStr}
-            ORDER BY tg.name
+            ORDER BY tg.sort_order, tg.name
         ");
         $stmt->execute($params);
         $groups = $stmt->fetchAll();
+
         // Load rooms, workers, and tasks for each group
         $stRooms   = $db->prepare("SELECT rm.id, rm.name FROM room_default_task_groups rdtg JOIN rooms rm ON rm.id = rdtg.room_id WHERE rdtg.task_group_id = ?");
         $stWorkers = $db->prepare("SELECT u.id, u.name FROM task_group_preferred_workers tgpw JOIN users u ON u.id = tgpw.user_id WHERE tgpw.task_group_id = ?");
-        $stTasks   = $db->prepare("SELECT t.id, t.name FROM task_group_tasks tgt JOIN tasks t ON t.id = tgt.task_id WHERE tgt.task_group_id = ? ORDER BY tgt.sort_order, t.name");
+        $stTasks   = $db->prepare("SELECT t.id, t.name, t.reusable FROM task_group_tasks tgt JOIN tasks t ON t.id = tgt.task_id WHERE tgt.task_group_id = ? ORDER BY tgt.sort_order, t.name");
         $stTaskRooms = $db->prepare("SELECT rm.id, rm.name FROM task_rooms tr JOIN rooms rm ON rm.id = tr.room_id WHERE tr.task_id = ?");
+        $stChildren  = $db->prepare("
+            SELECT tg2.id, tg2.name, tg2.parent_id, tg2.sort_order, tt2.name AS type_name,
+                   (SELECT COUNT(*) FROM task_group_tasks tgt2 WHERE tgt2.task_group_id = tg2.id) AS task_count,
+                   (SELECT COUNT(*) FROM task_groups tg3 WHERE tg3.parent_id = tg2.id) AS child_group_count
+            FROM task_groups tg2
+            JOIN task_types tt2 ON tt2.id = tg2.task_type_id
+            WHERE tg2.parent_id = ?
+            ORDER BY tg2.sort_order, tg2.name
+        ");
+
         foreach ($groups as &$group) {
             $gid = $group['id'];
             $stRooms->execute([$gid]);    $group['rooms']   = $stRooms->fetchAll();
@@ -383,6 +406,11 @@ switch ($action) {
             foreach ($group['tasks'] as &$task) {
                 $stTaskRooms->execute([$task['id']]);
                 $task['rooms'] = $stTaskRooms->fetchAll();
+            }
+            // Include child groups (one level deep) unless flat mode
+            if (!$flat) {
+                $stChildren->execute([$gid]);
+                $group['children'] = $stChildren->fetchAll();
             }
         }
         echo json_encode(array_values($groups));
@@ -397,7 +425,7 @@ switch ($action) {
         if (!$group) { echo json_encode(['error' => 'Not found']); exit; }
 
         $s = $db->prepare("
-            SELECT t.id, t.name, t.estimated_minutes, tgt.sort_order
+            SELECT t.id, t.name, t.estimated_minutes, t.reusable, tgt.sort_order
             FROM task_group_tasks tgt
             JOIN tasks t ON t.id = tgt.task_id
             WHERE tgt.task_group_id = ?
@@ -405,6 +433,20 @@ switch ($action) {
         ");
         $s->execute([$id]);
         $group['tasks'] = $s->fetchAll();
+
+        // Child groups
+        $s = $db->prepare("
+            SELECT tg2.id, tg2.name, tg2.description, tg2.parent_id, tg2.sort_order,
+                   tg2.task_type_id, tg2.estimated_minutes, tt2.name AS type_name,
+                   (SELECT COUNT(*) FROM task_group_tasks tgt2 WHERE tgt2.task_group_id = tg2.id) AS task_count,
+                   (SELECT COUNT(*) FROM task_groups tg3 WHERE tg3.parent_id = tg2.id) AS child_group_count
+            FROM task_groups tg2
+            JOIN task_types tt2 ON tt2.id = tg2.task_type_id
+            WHERE tg2.parent_id = ?
+            ORDER BY tg2.sort_order, tg2.name
+        ");
+        $s->execute([$id]);
+        $group['children'] = $s->fetchAll();
 
         // Preferred workers
         $s = $db->prepare("SELECT u.id, u.name FROM task_group_preferred_workers tgpw JOIN users u ON u.id = tgpw.user_id WHERE tgpw.task_group_id = ?");
@@ -426,19 +468,26 @@ switch ($action) {
         break;
 
     case 'save_task_group':
-        $id       = (int)($_POST['id'] ?? 0);
-        $name     = trim($_POST['name'] ?? '');
-        $desc     = trim($_POST['description'] ?? '') ?: null;
-        $typeId   = (int)($_POST['task_type_id'] ?? 0);
-        $estMins  = (int)($_POST['estimated_minutes'] ?? 15);
+        $id        = (int)($_POST['id'] ?? 0);
+        $name      = trim($_POST['name'] ?? '');
+        $desc      = trim($_POST['description'] ?? '') ?: null;
+        $typeId    = (int)($_POST['task_type_id'] ?? 0);
+        $estMins   = (int)($_POST['estimated_minutes'] ?? 15);
+        $parentId  = isset($_POST['parent_id']) && $_POST['parent_id'] !== '' ? (int)$_POST['parent_id'] : null;
+        $sortOrder = (int)($_POST['sort_order'] ?? 0);
         if (!$name || !$typeId) { echo json_encode(['error' => 'Name and type are required']); exit; }
 
+        // Prevent circular parent reference
+        if ($parentId && $id && $parentId == $id) {
+            echo json_encode(['error' => 'A group cannot be its own parent']); exit;
+        }
+
         if ($id) {
-            $stmt = $db->prepare("UPDATE task_groups SET name=?, description=?, task_type_id=?, estimated_minutes=? WHERE id=?");
-            $stmt->execute([$name, $desc, $typeId, $estMins, $id]);
+            $stmt = $db->prepare("UPDATE task_groups SET name=?, description=?, task_type_id=?, estimated_minutes=?, parent_id=?, sort_order=? WHERE id=?");
+            $stmt->execute([$name, $desc, $typeId, $estMins, $parentId, $sortOrder, $id]);
         } else {
-            $stmt = $db->prepare("INSERT INTO task_groups (name, description, task_type_id, estimated_minutes) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$name, $desc, $typeId, $estMins]);
+            $stmt = $db->prepare("INSERT INTO task_groups (name, description, task_type_id, estimated_minutes, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $desc, $typeId, $estMins, $parentId, $sortOrder]);
             $id = (int)$db->lastInsertId();
         }
 
@@ -470,6 +519,16 @@ switch ($action) {
         }
 
         echo json_encode(['success' => true, 'id' => $id]);
+        break;
+
+    case 'set_group_parent':
+        $id       = (int)($_POST['id'] ?? 0);
+        $parentId = isset($_POST['parent_id']) && $_POST['parent_id'] !== '' ? (int)$_POST['parent_id'] : null;
+        if (!$id) { echo json_encode(['error' => 'ID required']); exit; }
+        if ($parentId && $parentId == $id) { echo json_encode(['error' => 'Cannot be its own parent']); exit; }
+        $stmt = $db->prepare("UPDATE task_groups SET parent_id = ? WHERE id = ?");
+        $stmt->execute([$parentId, $id]);
+        echo json_encode(['success' => true]);
         break;
 
     case 'delete_task_group':
@@ -524,35 +583,60 @@ switch ($action) {
         $whereStr = implode(' AND ', $where);
         $stmt = $db->prepare("
             SELECT ja.*,
-                   tg.name AS group_name,
-                   tg.estimated_minutes,
-                   tt.name AS type_name,
+                   COALESCE(tg.name, t_single.name) AS group_name,
+                   COALESCE(tg.estimated_minutes, 0) AS estimated_minutes,
+                   COALESCE(tt.name, tt2.name, '') AS type_name,
                    rm.name AS room_name,
                    fl.name AS floor_name,
                    b.name  AS building_name
             FROM janitor_task_assignments ja
-            JOIN task_groups tg ON tg.id = ja.task_group_id
-            JOIN task_types tt  ON tt.id = tg.task_type_id
+            LEFT JOIN task_groups tg ON tg.id = ja.task_group_id
+            LEFT JOIN task_types tt  ON tt.id = tg.task_type_id
+            LEFT JOIN tasks t_single ON t_single.id = ja.task_id AND ja.task_group_id IS NULL
+            LEFT JOIN task_types tt2 ON tt2.id = t_single.task_type_id
             JOIN rooms rm       ON rm.id = ja.room_id
             JOIN floors fl      ON fl.id = rm.floor_id
             JOIN buildings b    ON b.id  = fl.building_id
             WHERE {$whereStr}
-            ORDER BY tt.priority_order, ja.deadline, tg.name
+            ORDER BY COALESCE(tt.priority_order, tt2.priority_order, 999), ja.deadline, COALESCE(tg.name, t_single.name)
         ");
         $stmt->execute($params);
         $assignments = $stmt->fetchAll();
 
-        // Load checklist for each
+        // Load checklist for each, with sub-group name for nested groups
+        $stChecklist = $db->prepare("
+            SELECT jtc.task_id, t.name AS task_name, jtc.completed, jtc.completed_at,
+                   tgt_sub.task_group_id AS sub_group_id
+            FROM janitor_task_checklist jtc
+            JOIN tasks t ON t.id = jtc.task_id
+            LEFT JOIN task_group_tasks tgt_sub ON tgt_sub.task_id = t.id
+            WHERE jtc.assignment_id = ?
+            ORDER BY tgt_sub.task_group_id, tgt_sub.sort_order, t.name
+        ");
+        $stSubGroupName = $db->prepare("SELECT name FROM task_groups WHERE id = ?");
+
         foreach ($assignments as &$a) {
-            $s = $db->prepare("
-                SELECT jtc.task_id, t.name AS task_name, jtc.completed, jtc.completed_at
-                FROM janitor_task_checklist jtc
-                JOIN tasks t ON t.id = jtc.task_id
-                WHERE jtc.assignment_id = ?
-                ORDER BY t.name
-            ");
-            $s->execute([$a['id']]);
-            $a['checklist'] = $s->fetchAll();
+            $stChecklist->execute([$a['id']]);
+            $items = $stChecklist->fetchAll();
+
+            // Resolve sub-group names (only for child groups of this assignment's group)
+            $mainGroupId = $a['task_group_id'];
+            $sgNameCache = [];
+            foreach ($items as &$item) {
+                $sgId = $item['sub_group_id'];
+                $item['sub_group_name'] = null;
+                // Only show sub-group name if the task's group is a child of the main assignment group
+                if ($sgId && $mainGroupId && $sgId != $mainGroupId) {
+                    if (!isset($sgNameCache[$sgId])) {
+                        $stSubGroupName->execute([$sgId]);
+                        $row = $stSubGroupName->fetch();
+                        $sgNameCache[$sgId] = $row ? $row['name'] : null;
+                    }
+                    $item['sub_group_name'] = $sgNameCache[$sgId];
+                }
+                unset($item['sub_group_id']); // don't leak internal id
+            }
+            $a['checklist'] = $items;
         }
 
         echo json_encode(array_values($assignments));
@@ -696,6 +780,81 @@ switch ($action) {
             $stWorkers->execute([$tid]);  $task['workers']    = $stWorkers->fetchAll();
         }
         echo json_encode(array_values($tasks));
+        break;
+
+    // ═══════════════════════════════════════════════════════════
+    // RECURSIVE TASK COLLECTION FROM GROUP TREE
+    // ═══════════════════════════════════════════════════════════
+
+    case 'get_group_leaf_tasks':
+        // Given a group id, recursively collect ALL leaf tasks from it and all descendant groups
+        $groupId = (int)($_GET['group_id'] ?? 0);
+        if (!$groupId) { echo json_encode(['error' => 'group_id required']); exit; }
+
+        $allTasks = [];
+        $visited = [];
+        $stGroupTasks = $db->prepare("SELECT t.id, t.name, t.estimated_minutes, t.reusable FROM task_group_tasks tgt JOIN tasks t ON t.id = tgt.task_id WHERE tgt.task_group_id = ? ORDER BY tgt.sort_order, t.name");
+        $stChildGroups = $db->prepare("SELECT id FROM task_groups WHERE parent_id = ? ORDER BY sort_order, name");
+
+        function collectLeafTasks($gid, $db, $stGroupTasks, $stChildGroups, &$allTasks, &$visited) {
+            if (in_array($gid, $visited)) return; // prevent infinite loops
+            $visited[] = $gid;
+
+            // Collect direct tasks
+            $stGroupTasks->execute([$gid]);
+            foreach ($stGroupTasks->fetchAll() as $task) {
+                $allTasks[$task['id']] = $task; // dedup by id
+            }
+
+            // Recurse into children
+            $stChildGroups->execute([$gid]);
+            foreach ($stChildGroups->fetchAll() as $child) {
+                collectLeafTasks($child['id'], $db, $stGroupTasks, $stChildGroups, $allTasks, $visited);
+            }
+        }
+
+        collectLeafTasks($groupId, $db, $stGroupTasks, $stChildGroups, $allTasks, $visited);
+        echo json_encode(array_values($allTasks));
+        break;
+
+    // ═══════════════════════════════════════════════════════════
+    // GET GROUP HIERARCHY TREE (full recursive tree for a group)
+    // ═══════════════════════════════════════════════════════════
+
+    case 'get_group_tree':
+        $groupId = (int)($_GET['group_id'] ?? 0);
+        if (!$groupId) { echo json_encode(['error' => 'group_id required']); exit; }
+
+        function buildGroupTree($gid, $db) {
+            $stGroup = $db->prepare("
+                SELECT tg.*, tt.name AS type_name
+                FROM task_groups tg
+                JOIN task_types tt ON tt.id = tg.task_type_id
+                WHERE tg.id = ?
+            ");
+            $stGroup->execute([$gid]);
+            $group = $stGroup->fetch();
+            if (!$group) return null;
+
+            // Tasks in this group
+            $stTasks = $db->prepare("SELECT t.id, t.name, t.estimated_minutes, t.reusable, tgt.sort_order FROM task_group_tasks tgt JOIN tasks t ON t.id = tgt.task_id WHERE tgt.task_group_id = ? ORDER BY tgt.sort_order, t.name");
+            $stTasks->execute([$gid]);
+            $group['tasks'] = $stTasks->fetchAll();
+
+            // Child groups (recursive)
+            $stChildren = $db->prepare("SELECT id FROM task_groups WHERE parent_id = ? ORDER BY sort_order, name");
+            $stChildren->execute([$gid]);
+            $group['children'] = [];
+            foreach ($stChildren->fetchAll() as $child) {
+                $childTree = buildGroupTree($child['id'], $db);
+                if ($childTree) $group['children'][] = $childTree;
+            }
+
+            return $group;
+        }
+
+        $tree = buildGroupTree($groupId, $db);
+        echo json_encode($tree ?: ['error' => 'Not found']);
         break;
 
     default:

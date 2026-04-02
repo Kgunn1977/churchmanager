@@ -6,6 +6,10 @@ require_once __DIR__ . '/../config/database.php';
 header('Content-Type: application/json');
 
 $db     = getDB();
+// Normalise: if the request body is JSON, populate $_POST so downstream code works uniformly
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST)) {
+    $_POST = json_decode(file_get_contents('php://input'), true) ?: [];
+}
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 // ── Recurrence helper ─────────────────────────────────────────────────────────

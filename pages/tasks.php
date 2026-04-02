@@ -263,7 +263,7 @@ $fp_buildings = $buildings;
                 Edit Task(s)
             </button>
             <div id="editor-action-btns" style="display:flex; gap:6px; margin-top:6px;">
-                <button id="editor-group-btn" onclick="groupSelectedTasks()" style="display:none; flex:1; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:7px; font-size:12px; font-weight:600; cursor:pointer; transition:all .12s; color:#1e40af; font-family:ui-sans-serif,system-ui,sans-serif;">
+                <button id="editor-group-btn" onclick="groupSelected()" style="display:none; flex:1; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:7px; font-size:12px; font-weight:600; cursor:pointer; transition:all .12s; color:#1e40af; font-family:ui-sans-serif,system-ui,sans-serif;">
                     <svg style="display:inline; vertical-align:-2px; margin-right:3px;" width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
                     Group
                 </button>
@@ -327,6 +327,23 @@ $fp_buildings = $buildings;
                     <div style="margin-bottom:14px;">
                         <label class="ef-label">Estimated Time <span>(minutes)</span></label>
                         <input type="number" id="e-est-min" required class="ef-input" style="width:120px;" min="1" value="5">
+                    </div>
+
+                    <!-- Reusable (task mode only) -->
+                    <div id="reusable-section" style="margin-bottom:14px;">
+                        <label class="ef-label">Reusable</label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#374151;">
+                            <input type="checkbox" id="e-reusable" checked style="width:18px;height:18px;accent-color:#2563eb;cursor:pointer;">
+                            Show in library &amp; group builder by default
+                        </label>
+                    </div>
+
+                    <!-- Parent Group (group mode only) -->
+                    <div id="parent-group-section" style="display:none; margin-bottom:14px;">
+                        <label class="ef-label">Parent Group <span>(optional — nest inside another group)</span></label>
+                        <select id="e-parent-group" class="ef-input" style="cursor:pointer;">
+                            <option value="">— None (top-level) —</option>
+                        </select>
                     </div>
 
                     <!-- Preferred Workers -->
@@ -427,6 +444,7 @@ let workersState = [];
 let roomsState = [];
 let _loadedTasks = [];   // cache of last-loaded task list (for room lookup when grouping)
 let _loadedGroups = [];  // cache of last-loaded group list (for detail preview)
+let _pendingChildGroupIds = [];  // group IDs to set as children after saving a new parent group
 let loadTimer = null;
 let selectedRoomIds = []; // room IDs from the floor plan picker
 
@@ -498,7 +516,13 @@ function switchTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
-    document.getElementById('editor-new-btn').textContent = tab === 'tasks' ? '+ New Task' : '+ New Task Group';
+    const newBtn = document.getElementById('editor-new-btn');
+    if (tab === 'tasks') {
+        newBtn.textContent = '+ New Task';
+        newBtn.style.display = '';
+    } else {
+        newBtn.style.display = 'none';
+    }
     closeEditor();
 }
 
@@ -593,29 +617,58 @@ function loadGroups(typeId, workerId, q, hasRoomFilter) {
         const list  = document.getElementById('group-list');
         const empty = document.getElementById('group-empty');
         list.innerHTML = '';
-        empty.classList.toggle('hidden', groups.length > 0);
-        if (groups.length === 0) {
+
+        // Build hierarchy: separate top-level from children
+        const topLevel = groups.filter(g => !g.parent_id);
+        const byParent = {};
+        groups.forEach(g => {
+            if (g.parent_id) {
+                if (!byParent[g.parent_id]) byParent[g.parent_id] = [];
+                byParent[g.parent_id].push(g);
+            }
+        });
+
+        // When searching/filtering, show flat list so results aren't hidden
+        const showFlat = q || hasRoomFilter;
+        const displayGroups = showFlat ? groups : topLevel;
+
+        empty.classList.toggle('hidden', displayGroups.length > 0);
+        if (displayGroups.length === 0) {
             empty.textContent = hasRoomFilter
                 ? 'No task groups assigned to the selected rooms.'
                 : 'No task groups found. Create one to get started.';
         }
-        groups.forEach(g => {
+
+        function renderGroupCard(g, depth) {
+            const indent = depth * 24;
             const selClass = selectedCards.some(c => c.mode === 'group' && c.id == g.id) ? ' selected' : '';
             const rooms   = (g.rooms||[]).map(r => esc(r.name)).join(', ');
             const workers = (g.workers||[]).map(w => esc(w.name)).join(', ');
+            const childCount = g.child_group_count || 0;
             const meta = [
                 `<span class="${badgeClass(g.task_type_id)}">${esc(g.type_name)}</span>`,
                 `<span class="text-xs text-gray-400">${g.estimated_minutes} min</span>`,
                 `<span class="text-xs text-gray-400">${g.task_count} task${g.task_count!=1?'s':''}</span>`,
+                childCount > 0 ? `<span class="text-xs text-purple-500">${childCount} sub-group${childCount!=1?'s':''}</span>` : '',
                 rooms   ? `<span class="text-xs text-gray-500">${rooms}</span>` : '',
                 workers ? `<span class="text-xs text-indigo-500">${workers}</span>` : ''
             ].filter(Boolean).join('<span class="text-gray-300 mx-1">·</span>');
+
+            const depthIcon = depth > 0 ? `<span style="color:#9ca3af;font-size:11px;margin-right:4px;">${'└'.padStart(depth,'  ')}</span>` : '';
+
             list.innerHTML += `
-                <div class="card card-compact${selClass}" data-id="${g.id}" data-mode="group" data-name="${esc(g.name)}" onclick="selectCard('group', ${g.id}, this, event)">
-                    <div class="font-semibold text-gray-800 text-sm">${esc(g.name)}</div>
+                <div class="card card-compact${selClass}" data-id="${g.id}" data-mode="group" data-name="${esc(g.name)}" onclick="selectCard('group', ${g.id}, this, event)" style="margin-left:${indent}px;">
+                    <div class="font-semibold text-gray-800 text-sm">${depthIcon}${esc(g.name)}</div>
                     <div class="flex items-center flex-wrap gap-1 mt-1">${meta}</div>
                 </div>`;
-        });
+
+            // Render children (non-flat mode only)
+            if (!showFlat && byParent[g.id]) {
+                byParent[g.id].forEach(child => renderGroupCard(child, depth + 1));
+            }
+        }
+
+        displayGroups.forEach(g => renderGroupCard(g, 0));
     });
 }
 
@@ -642,6 +695,12 @@ function openEditor(mode = null, id = null) {
     // Show/hide mode-specific sections
     document.getElementById('resource-section').style.display = mode === 'task' ? '' : 'none';
     document.getElementById('group-tasks-section').style.display = mode === 'group' ? '' : 'none';
+    document.getElementById('reusable-section').style.display = mode === 'task' ? '' : 'none';
+    document.getElementById('parent-group-section').style.display = mode === 'group' ? '' : 'none';
+    document.getElementById('e-reusable').checked = true;
+
+    // Load parent group options if group mode
+    if (mode === 'group') { loadParentGroupOptions(id); }
 
     // Reset all state
     resourceState = { tools: [], supplies: [], materials: [], equipment: [] };
@@ -690,6 +749,7 @@ function openEditor(mode = null, id = null) {
             }
 
             if (mode === 'task') {
+                document.getElementById('e-reusable').checked = data.reusable == 1;
                 resourceState.tools      = (data.tools || []).map(r => ({id: r.id, name: r.name}));
                 resourceState.supplies   = (data.supplies || []).map(r => ({id: r.id, name: r.name}));
                 resourceState.materials  = (data.materials || []).map(r => ({id: r.id, name: r.name}));
@@ -701,6 +761,8 @@ function openEditor(mode = null, id = null) {
             } else {
                 groupTasksState = (data.tasks || []).map(t => ({id: t.id, name: t.name}));
                 renderGroupTaskChips();
+                // Set parent group
+                document.getElementById('e-parent-group').value = data.parent_id || '';
             }
         });
     } else {
@@ -724,6 +786,7 @@ function closeEditor() {
     touchedFields = {};
     selectedCards = [];
     _editorOpen = false;
+    _pendingChildGroupIds = [];
     document.getElementById('e-name').required = true;
     document.getElementById('e-name').placeholder = 'e.g. Clean Toilet, Tidy Kitchen...';
     document.getElementById('e-desc').placeholder = 'Brief description...';
@@ -811,13 +874,13 @@ function updateSelectionUI() {
         editBtn.style.opacity = '1';
         editBtn.style.cursor = 'pointer';
 
-        // Show Group button when 2+ tasks are selected on the Tasks tab
+        // Show Group button when 2+ tasks OR 2+ groups are selected
         const allTasks = selectedCards.every(c => c.mode === 'task');
-        groupBtn.style.display = (allTasks && selectedCards.length >= 2) ? '' : 'none';
+        const allGroups = selectedCards.every(c => c.mode === 'group');
+        groupBtn.style.display = (selectedCards.length >= 2 && (allTasks || allGroups)) ? 'block' : 'none';
 
         // Show Ungroup button when 1+ groups are selected on the Groups tab
-        const allGroups = selectedCards.every(c => c.mode === 'group');
-        ungroupBtn.style.display = allGroups ? '' : 'none';
+        ungroupBtn.style.display = allGroups ? 'block' : 'none';
 
         // Build detail preview
         renderSelectionDetail(detailEl);
@@ -873,7 +936,19 @@ function renderSelectionDetail(el) {
                     workers.forEach(w => { html += `<span style="${chipStyle}">${esc(w.name)}</span>`; });
                     html += '</div>';
                 }
-                if (!tasks.length && !rooms.length && !workers.length) {
+                // Child groups
+                const children = g.children || [];
+                if (children.length) {
+                    html += `<div style="${labelStyle}">Sub-Groups</div>`;
+                    children.forEach(ch => {
+                        html += `<div style="${rowStyle}">
+                            <span style="${taskNameStyle}">${esc(ch.name)}</span>
+                            <span style="${roomNameStyle}">${ch.task_count} task${ch.task_count!=1?'s':''}</span>
+                        </div>`;
+                    });
+                    html += '<div style="margin-bottom:10px;"></div>';
+                }
+                if (!tasks.length && !rooms.length && !workers.length && !children.length) {
                     html += '<div style="color:#9ca3af; font-size:13px; padding:8px 0;">No details to show.</div>';
                 }
             }
@@ -943,6 +1018,8 @@ function openMultiEditor() {
     document.getElementById('e-del-btn').style.display = 'none';
     document.getElementById('resource-section').style.display = mode === 'task' ? '' : 'none';
     document.getElementById('group-tasks-section').style.display = mode === 'group' ? '' : 'none';
+    document.getElementById('reusable-section').style.display = mode === 'task' ? '' : 'none';
+    document.getElementById('parent-group-section').style.display = mode === 'group' ? '' : 'none';
 
     // Reset
     resourceState = { tools: [], supplies: [], materials: [], equipment: [] };
@@ -1069,6 +1146,121 @@ function allSameList(items, key) {
     return items.every(i => (i[key] || []).map(x => x.id).sort().join(',') === first);
 }
 
+function groupSelected() {
+    if (selectedCards.length < 2) return;
+    const allTasks = selectedCards.every(c => c.mode === 'task');
+    const allGroups = selectedCards.every(c => c.mode === 'group');
+    if (allTasks) groupSelectedTasks();
+    else if (allGroups) groupSelectedGroups();
+    else alert('Select items of the same type to group.');
+}
+
+function groupSelectedGroups() {
+    if (selectedCards.length < 2) return;
+    if (!selectedCards.every(c => c.mode === 'group')) {
+        alert('Only groups can be grouped together.'); return;
+    }
+
+    const groupIds = selectedCards.map(c => c.id);
+    const groupNames = selectedCards.map(c => c.name);
+
+    // Open editor in group mode with no pre-filled tasks — this is a parent group
+    editingMode = 'group';
+    editingId = null;
+    multiEditIds = [];
+    _editorOpen = true;
+
+    document.getElementById('e-mode').value = 'group';
+    document.getElementById('e-id').value = '';
+    document.getElementById('e-name').value = '';
+    document.getElementById('e-name').placeholder = 'e.g. Bathroom Deep Clean, Kitchen Reset...';
+    document.getElementById('e-name').required = true;
+    document.getElementById('e-desc').value = '';
+    document.getElementById('e-desc').placeholder = 'Brief description...';
+
+    // Sum estimated minutes from selected groups
+    const totalMin = groupIds.reduce((sum, gid) => {
+        const g = _loadedGroups.find(g => g.id == gid);
+        return sum + (g ? Number(g.estimated_minutes) || 0 : 0);
+    }, 0);
+
+    // Pre-fill type if all selected groups share the same one
+    const groupTypes = groupIds.map(gid => { const g = _loadedGroups.find(g => g.id == gid); return g ? g.task_type_id : null; }).filter(Boolean);
+    const sameType = groupTypes.length && groupTypes.every(v => v == groupTypes[0]) ? groupTypes[0] : '';
+    document.getElementById('e-type').value = sameType;
+    document.getElementById('e-est-min').value = totalMin || 15;
+    document.getElementById('e-del-btn').style.display = 'none';
+
+    document.getElementById('resource-section').style.display = 'none';
+    document.getElementById('group-tasks-section').style.display = '';
+    document.getElementById('reusable-section').style.display = 'none';
+    document.getElementById('parent-group-section').style.display = '';
+    loadParentGroupOptions(null);
+
+    // Reset states
+    resourceState = { tools: [], supplies: [], materials: [], equipment: [] };
+    groupTasksState = [];
+    workersState = [];
+    roomsState = [];
+    renderResourceChips('tools'); renderResourceChips('supplies');
+    renderResourceChips('materials'); renderResourceChips('equipment');
+    renderWorkerChips(); renderRoomChips();
+    roomPicker.clearSelection();
+    renderGroupTaskChips();
+
+    // Collect union of workers from all selected groups
+    const seenWorkerIds = new Set();
+    groupIds.forEach(gid => {
+        const g = _loadedGroups.find(g => g.id == gid);
+        if (g && g.workers) {
+            g.workers.forEach(w => {
+                if (!seenWorkerIds.has(Number(w.id))) {
+                    seenWorkerIds.add(Number(w.id));
+                    workersState.push({ id: Number(w.id), name: w.name });
+                }
+            });
+        }
+    });
+    renderWorkerChips();
+
+    // Collect union of rooms from all selected groups
+    const seenRoomIds = new Set();
+    const unionRooms = [];
+    groupIds.forEach(gid => {
+        const g = _loadedGroups.find(g => g.id == gid);
+        if (g && g.rooms) {
+            g.rooms.forEach(r => {
+                if (!seenRoomIds.has(Number(r.id))) {
+                    seenRoomIds.add(Number(r.id));
+                    unionRooms.push(r);
+                }
+            });
+        }
+    });
+    if (unionRooms.length) {
+        const roomIds = unionRooms.map(r => Number(r.id));
+        roomPicker.selectRooms(roomIds);
+        const sel = roomPicker.getSelection();
+        roomsState = Object.values(sel).map(r => ({
+            id: Number(r.id),
+            name: r.name,
+            detail: (r.building || '') + ' / ' + (r.floor || '')
+        }));
+        selectedRoomIds = Object.keys(sel).map(Number);
+        updateRoomFilterBanner();
+        renderRoomChips();
+    }
+
+    // Store group IDs to set as children after saving
+    _pendingChildGroupIds = groupIds;
+
+    document.getElementById('editor-title').textContent = 'New Parent Group';
+    document.getElementById('editor-empty').style.display = 'none';
+    document.getElementById('editor-edit-row').style.display = 'none';
+    document.getElementById('editor-selection-detail').style.display = 'none';
+    document.getElementById('editor-form-wrap').classList.add('open');
+}
+
 function groupSelectedTasks() {
     if (selectedCards.length < 2) return;
     if (!selectedCards.every(c => c.mode === 'task')) {
@@ -1109,6 +1301,9 @@ function groupSelectedTasks() {
 
     document.getElementById('resource-section').style.display = 'none';
     document.getElementById('group-tasks-section').style.display = '';
+    document.getElementById('reusable-section').style.display = 'none';
+    document.getElementById('parent-group-section').style.display = '';
+    loadParentGroupOptions(null);
 
     // Reset states
     resourceState = { tools: [], supplies: [], materials: [], equipment: [] };
@@ -1280,17 +1475,36 @@ function saveItem(e) {
     fd.set('room_ids', roomsState.map(r => r.id).join(','));
 
     if (mode === 'task') {
+        fd.set('reusable', document.getElementById('e-reusable').checked ? 1 : 0);
         fd.set('tool_ids',      resourceState.tools.map(r => r.id).join(','));
         fd.set('supply_ids',    resourceState.supplies.map(r => r.id).join(','));
         fd.set('material_ids',  resourceState.materials.map(r => r.id).join(','));
         fd.set('equipment_ids', resourceState.equipment.map(r => r.id).join(','));
     } else {
         fd.set('task_ids', groupTasksState.map(t => t.id).join(','));
+        fd.set('parent_id', document.getElementById('e-parent-group').value);
     }
 
     postApi(fd).then(r => {
         if (r.error) { alert(r.error); return; }
-        closeEditor();
+
+        // If we were creating a parent group from selected groups, update their parent_id
+        if (mode === 'group' && _pendingChildGroupIds.length > 0 && r.id) {
+            const newParentId = r.id;
+            Promise.all(_pendingChildGroupIds.map(childId => {
+                const childFd = new FormData();
+                childFd.set('action', 'set_group_parent');
+                childFd.set('id', childId);
+                childFd.set('parent_id', newParentId);
+                return postApi(childFd);
+            })).then(() => {
+                _pendingChildGroupIds = [];
+                closeEditor();
+            });
+        } else {
+            _pendingChildGroupIds = [];
+            closeEditor();
+        }
     });
 }
 
@@ -1531,6 +1745,55 @@ function addGroupTask(task) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// PARENT GROUP SELECTOR
+// ═══════════════════════════════════════════════════════════
+function loadParentGroupOptions(excludeId) {
+    // Fetch all groups (flat) and build options excluding the current group and its descendants
+    api('get_task_groups', { flat: 1 }).then(groups => {
+        const sel = document.getElementById('e-parent-group');
+        sel.innerHTML = '<option value="">— None (top-level) —</option>';
+
+        // Build a quick tree to find descendants of excludeId (to prevent circular refs)
+        const descendants = new Set();
+        if (excludeId) {
+            descendants.add(Number(excludeId));
+            let changed = true;
+            while (changed) {
+                changed = false;
+                groups.forEach(g => {
+                    if (g.parent_id && descendants.has(Number(g.parent_id)) && !descendants.has(Number(g.id))) {
+                        descendants.add(Number(g.id));
+                        changed = true;
+                    }
+                });
+            }
+        }
+
+        // Build indented options showing hierarchy
+        const byParent = {};
+        groups.forEach(g => {
+            const pid = g.parent_id || 0;
+            if (!byParent[pid]) byParent[pid] = [];
+            byParent[pid].push(g);
+        });
+
+        function addOptions(parentId, depth) {
+            const children = byParent[parentId] || [];
+            children.forEach(g => {
+                if (descendants.has(Number(g.id))) return; // skip self & descendants
+                const indent = '\u00A0\u00A0'.repeat(depth);
+                const opt = document.createElement('option');
+                opt.value = g.id;
+                opt.textContent = indent + (depth > 0 ? '└ ' : '') + g.name;
+                sel.appendChild(opt);
+                addOptions(g.id, depth + 1);
+            });
+        }
+        addOptions(0, 0);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════
 function api(action, params = {}) {
@@ -1538,9 +1801,6 @@ function api(action, params = {}) {
 }
 function postApi(fd) {
     return fetch('/api/tasks_api.php', { method: 'POST', body: fd }).then(r => r.json());
-}
-function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ═══════════════════════════════════════════════════════════

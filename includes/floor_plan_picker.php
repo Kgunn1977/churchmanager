@@ -561,6 +561,8 @@ function _fpAbbrev(name) {
 }
 
 window.FloorPlanPicker = FloorPlanPicker;
+window._fpCenter = _fpCenter;
+window._fpDist   = _fpDist;
 })();
 }
 </script>
