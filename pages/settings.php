@@ -14,7 +14,7 @@ $db = getDB();
     </div>
 
     <!-- ── Quick Links ────────────────────────────────────── -->
-    <div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-4 gap-4 mb-6">
         <a href="<?= url('/pages/facilities.php') ?>" class="bg-white rounded-2xl shadow-sm p-5 border border-transparent hover:border-blue-200 transition group text-center">
             <svg class="w-7 h-7 mx-auto mb-2 text-blue-500 group-hover:text-blue-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
             <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700 transition">Facility Map</span>
@@ -26,6 +26,10 @@ $db = getDB();
         <a href="<?= url('/pages/app.php') ?>" class="bg-white rounded-2xl shadow-sm p-5 border border-transparent hover:border-blue-200 transition group text-center">
             <svg class="w-7 h-7 mx-auto mb-2 text-blue-500 group-hover:text-blue-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
             <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700 transition">Mobile App</span>
+        </a>
+        <a href="<?= url('/pages/roadmap.php') ?>" class="bg-white rounded-2xl shadow-sm p-5 border border-transparent hover:border-blue-200 transition group text-center">
+            <svg class="w-7 h-7 mx-auto mb-2 text-blue-500 group-hover:text-blue-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+            <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-700 transition">Roadmap</span>
         </a>
     </div>
 
@@ -98,19 +102,66 @@ $db = getDB();
     <div class="bg-white rounded-2xl shadow-sm p-6 border border-transparent hover:border-blue-200 mb-6">
         <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Deployment</h2>
 
-        <div class="flex items-center justify-between">
-            <div>
-                <label class="block text-sm font-semibold text-gray-700">Pull Latest from GitHub</label>
-                <p class="text-xs text-gray-400 mt-0.5">Pulls the latest committed changes from the master branch.</p>
+        <div class="space-y-5">
+            <!-- Git Pull -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Pull Latest from GitHub</label>
+                    <p class="text-xs text-gray-400 mt-0.5">Pulls the latest committed changes from the master branch.</p>
+                </div>
+                <button id="git-pull-btn" onclick="gitPull()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+                    Git Pull
+                </button>
             </div>
-            <button id="git-pull-btn" onclick="gitPull()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
-                Git Pull
-            </button>
-        </div>
 
-        <div id="git-output" class="hidden mt-4">
-            <pre class="bg-gray-900 text-green-400 rounded-lg p-4 text-xs font-mono overflow-x-auto max-h-48 whitespace-pre-wrap"></pre>
+            <div id="git-output" class="hidden">
+                <pre class="bg-gray-900 text-green-400 rounded-lg p-4 text-xs font-mono overflow-x-auto max-h-48 whitespace-pre-wrap"></pre>
+            </div>
+
+            <hr class="border-gray-100">
+
+            <!-- Git Push -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Push to GitHub</label>
+                    <p class="text-xs text-gray-400 mt-0.5">Stages all changes, commits, and pushes to the master branch.</p>
+                </div>
+                <button id="git-push-btn" onclick="gitPush()" class="bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+                    Git Push
+                </button>
+            </div>
+
+            <hr class="border-gray-100">
+
+            <!-- DB Export -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Export Database</label>
+                    <p class="text-xs text-gray-400 mt-0.5">Saves a snapshot of this database to <code class="bg-gray-100 px-1 rounded">data/db_snapshot.sql</code>. Push with push.bat.</p>
+                </div>
+                <button id="db-export-btn" onclick="dbExport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    Export DB
+                </button>
+            </div>
+
+            <!-- DB Import -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Sync Database from Snapshot</label>
+                    <p class="text-xs text-gray-400 mt-0.5">Replaces this database with the snapshot from <code class="bg-gray-100 px-1 rounded">data/db_snapshot.sql</code>. Git Pull first.</p>
+                </div>
+                <button id="db-import-btn" onclick="dbImport()" class="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Sync DB
+                </button>
+            </div>
+
+            <div id="db-output" class="hidden">
+                <pre class="bg-gray-900 text-green-400 rounded-lg p-4 text-xs font-mono overflow-x-auto max-h-48 whitespace-pre-wrap"></pre>
+            </div>
         </div>
     </div>
 
@@ -261,6 +312,132 @@ async function deleteTaskType() {
     closeTypeModal();
     loadTaskTypes();
     showToast('Task type deleted');
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATABASE SYNC
+// ═══════════════════════════════════════════════════════════
+async function dbExport() {
+    const btn = document.getElementById('db-export-btn');
+    const box = document.getElementById('db-output');
+    const pre = box.querySelector('pre');
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Exporting...';
+
+    try {
+        const r = await fetch(BASE_PATH + '/api/settings_api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: 'db_export' })
+        });
+        const result = await r.json();
+        box.classList.remove('hidden');
+
+        if (result.success) {
+            pre.textContent = `✅ Database exported successfully!\n\nTables: ${result.tables}\nSize: ${result.size}\nFile: ${result.file}\n\nNext steps:\n1. Run push.bat (on your Windows machine)\n2. Click Git Pull on the live site\n3. Click Sync DB on the live site`;
+            pre.classList.remove('text-red-400');
+            pre.classList.add('text-green-400');
+            showToast('Database exported');
+        } else {
+            pre.textContent = 'Error: ' + (result.error || 'Unknown error');
+            pre.classList.remove('text-green-400');
+            pre.classList.add('text-red-400');
+        }
+    } catch (e) {
+        box.classList.remove('hidden');
+        pre.textContent = 'Error: ' + e.message;
+        pre.classList.add('text-red-400');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> Export DB';
+}
+
+async function dbImport() {
+    if (!confirm('This will REPLACE the entire database with the local snapshot. Are you sure?')) return;
+
+    const btn = document.getElementById('db-import-btn');
+    const box = document.getElementById('db-output');
+    const pre = box.querySelector('pre');
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Syncing...';
+
+    try {
+        const r = await fetch(BASE_PATH + '/api/settings_api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: 'db_import' })
+        });
+        const result = await r.json();
+        box.classList.remove('hidden');
+
+        if (result.success) {
+            pre.textContent = `✅ Database synced successfully!\n\nStatements executed: ${result.statements}\nSnapshot date: ${result.snapshot_date}`;
+            pre.classList.remove('text-red-400');
+            pre.classList.add('text-green-400');
+            showToast('Database synced');
+        } else {
+            let msg = 'Error: ' + (result.error || 'Import had errors');
+            if (result.errors && result.errors.length > 0) {
+                msg += '\n\nStatements executed: ' + result.statements;
+                msg += '\n\nErrors:\n' + result.errors.join('\n');
+            }
+            pre.textContent = msg;
+            pre.classList.remove('text-green-400');
+            pre.classList.add('text-red-400');
+        }
+    } catch (e) {
+        box.classList.remove('hidden');
+        pre.textContent = 'Error: ' + e.message;
+        pre.classList.add('text-red-400');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Sync DB';
+}
+
+// ═══════════════════════════════════════════════════════════
+// GIT PUSH
+// ═══════════════════════════════════════════════════════════
+async function gitPush() {
+    if (!confirm('This will commit all changes and push to GitHub. Continue?')) return;
+
+    const btn = document.getElementById('git-push-btn');
+    const box = document.getElementById('git-output');
+    const pre = box.querySelector('pre');
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Pushing...';
+
+    try {
+        const r = await fetch(BASE_PATH + '/api/settings_api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: 'git_push' })
+        });
+        const result = await r.json();
+        box.classList.remove('hidden');
+        pre.textContent = result.output || 'No output';
+
+        if (result.success) {
+            showToast('Push successful');
+            pre.classList.remove('text-red-400');
+            pre.classList.add('text-green-400');
+        } else {
+            showToast('Push failed — see output below');
+            pre.classList.remove('text-green-400');
+            pre.classList.add('text-red-400');
+        }
+    } catch (e) {
+        box.classList.remove('hidden');
+        pre.textContent = 'Error: ' + e.message;
+        pre.classList.add('text-red-400');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg> Git Push';
 }
 
 // ═══════════════════════════════════════════════════════════

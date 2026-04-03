@@ -112,6 +112,164 @@ switch ($action) {
         break;
     }
 
+    // ── Export database to SQL snapshot ────────────────────
+    case 'db_export': {
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }
+
+        $root = realpath(__DIR__ . '/..');
+        $file = $root . '/data/db_snapshot.sql';
+
+        // Ensure data/ directory exists
+        if (!is_dir($root . '/data')) { mkdir($root . '/data', 0755, true); }
+
+        // Get all tables
+        $tables = $db->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+        $sql = "-- Church Facility Manager DB Snapshot\n";
+        $sql .= "-- Generated: " . date('Y-m-d H:i:s') . "\n";
+        $sql .= "-- Source: " . gethostname() . "\n\n";
+        $sql .= "SET FOREIGN_KEY_CHECKS = 0;\n\n";
+
+        foreach ($tables as $table) {
+            // Skip sessions table if it exists
+            if ($table === 'sessions') continue;
+
+            // Get CREATE TABLE statement
+            $create = $db->query("SHOW CREATE TABLE `$table`")->fetch(PDO::FETCH_NUM);
+            $sql .= "DROP TABLE IF EXISTS `$table`;\n";
+            $sql .= $create[1] . ";\n\n";
+
+            // Get all rows
+            $rows = $db->query("SELECT * FROM `$table`")->fetchAll(PDO::FETCH_ASSOC);
+            if (count($rows) > 0) {
+                foreach ($rows as $row) {
+                    $vals = [];
+                    foreach ($row as $v) {
+                        if ($v === null) { $vals[] = 'NULL'; }
+                        else { $vals[] = $db->quote($v); }
+                    }
+                    $cols = '`' . implode('`, `', array_keys($row)) . '`';
+                    $sql .= "INSERT INTO `$table` ($cols) VALUES (" . implode(', ', $vals) . ");\n";
+                }
+                $sql .= "\n";
+            }
+        }
+
+        $sql .= "SET FOREIGN_KEY_CHECKS = 1;\n";
+
+        $bytes = file_put_contents($file, $sql);
+        if ($bytes === false) {
+            echo json_encode(['error' => 'Failed to write snapshot file']);
+        } else {
+            $kb = round($bytes / 1024, 1);
+            echo json_encode([
+                'success' => true,
+                'tables' => count($tables),
+                'size' => "{$kb} KB",
+                'file' => 'data/db_snapshot.sql'
+            ]);
+        }
+        break;
+    }
+
+    // ── Import database from SQL snapshot ────────────────
+    case 'db_import': {
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }
+
+        $root = realpath(__DIR__ . '/..');
+        $file = $root . '/data/db_snapshot.sql';
+
+        if (!file_exists($file)) {
+            echo json_encode(['error' => 'No snapshot file found. Run push.bat + Git Pull first.']);
+            break;
+        }
+
+        $sql = file_get_contents($file);
+        if (!$sql) {
+            echo json_encode(['error' => 'Snapshot file is empty']);
+            break;
+        }
+
+        $fileTime = date('Y-m-d H:i:s', filemtime($file));
+        $errors = [];
+        $stmtCount = 0;
+
+        // Split SQL into statements
+        // We need to handle multi-line CREATE TABLE statements properly
+        $statements = [];
+        $current = '';
+        foreach (explode("\n", $sql) as $line) {
+            // Skip comments and empty lines
+            if (preg_match('/^--/', $line) || trim($line) === '') {
+                $current .= $line . "\n";
+                continue;
+            }
+            $current .= $line . "\n";
+            // Statement ends with semicolon (not inside a string, simplified check)
+            if (preg_match('/;\s*$/', trim($line))) {
+                $stmt = trim($current);
+                if ($stmt && !preg_match('/^--/', $stmt)) {
+                    $statements[] = $stmt;
+                }
+                $current = '';
+            }
+        }
+
+        foreach ($statements as $stmt) {
+            try {
+                $db->exec($stmt);
+                $stmtCount++;
+            } catch (PDOException $e) {
+                $errors[] = substr($e->getMessage(), 0, 200);
+            }
+        }
+
+        echo json_encode([
+            'success' => count($errors) === 0,
+            'statements' => $stmtCount,
+            'errors' => $errors,
+            'snapshot_date' => $fileTime
+        ]);
+        break;
+    }
+
+    // ── Git push (commit & push to GitHub) ─────────────────
+    case 'git_push': {
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }
+        $root = realpath(__DIR__ . '/..');
+        $allOutput = [];
+        $hasError = false;
+
+        // Stage all changes
+        exec("cd " . escapeshellarg($root) . " && git add -A 2>&1", $out1, $c1);
+        $allOutput[] = '$ git add -A';
+        $allOutput = array_merge($allOutput, $out1);
+        if ($c1 !== 0) $hasError = true;
+
+        // Commit with timestamp
+        $msg = 'Update ' . date('Y-m-d H:i');
+        $out2 = []; $c2 = 0;
+        exec("cd " . escapeshellarg($root) . " && git commit -m " . escapeshellarg($msg) . " 2>&1", $out2, $c2);
+        $allOutput[] = '';
+        $allOutput[] = '$ git commit -m "' . $msg . '"';
+        $allOutput = array_merge($allOutput, $out2);
+        // c2=1 means "nothing to commit" — that's ok
+        if ($c2 > 1) $hasError = true;
+
+        // Push
+        $out3 = []; $c3 = 0;
+        exec("cd " . escapeshellarg($root) . " && git push 2>&1", $out3, $c3);
+        $allOutput[] = '';
+        $allOutput[] = '$ git push';
+        $allOutput = array_merge($allOutput, $out3);
+        if ($c3 !== 0) $hasError = true;
+
+        echo json_encode([
+            'success' => !$hasError,
+            'output'  => implode("\n", $allOutput)
+        ]);
+        break;
+    }
+
     // ── Git pull (deploy latest from GitHub) ───────────────
     case 'git_pull': {
         if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }

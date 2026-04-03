@@ -2,9 +2,9 @@
 require_once 'includes/auth.php';
 require_once 'config/database.php';
 
-// Already logged in — go to dashboard
+// Already logged in — go to calendar
 if (isLoggedIn()) {
-    header('Location: ' . url('/dashboard.php'));
+    header('Location: ' . url('/pages/reservations.php'));
     exit;
 }
 
@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password'])) {
             loginUser($user);
-            header('Location: ' . url('/dashboard.php'));
+            header('Location: ' . url('/pages/reservations.php'));
             exit;
         } else {
             $error = 'Incorrect email or password. Please try again.';
