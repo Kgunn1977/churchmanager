@@ -193,21 +193,24 @@ switch ($action) {
         $errors = [];
         $stmtCount = 0;
 
+        // Disable FK checks up front (safety net — also in snapshot SQL)
+        $db->exec("SET FOREIGN_KEY_CHECKS = 0");
+
         // Split SQL into statements
         // We need to handle multi-line CREATE TABLE statements properly
         $statements = [];
         $current = '';
         foreach (explode("\n", $sql) as $line) {
-            // Skip comments and empty lines
-            if (preg_match('/^--/', $line) || trim($line) === '') {
-                $current .= $line . "\n";
+            $trimmed = trim($line);
+            // Skip comment-only and empty lines (don't accumulate into buffer)
+            if ($trimmed === '' || strpos($trimmed, '--') === 0) {
                 continue;
             }
             $current .= $line . "\n";
-            // Statement ends with semicolon (not inside a string, simplified check)
-            if (preg_match('/;\s*$/', trim($line))) {
+            // Statement ends with semicolon
+            if (preg_match('/;\s*$/', $trimmed)) {
                 $stmt = trim($current);
-                if ($stmt && !preg_match('/^--/', $stmt)) {
+                if ($stmt) {
                     $statements[] = $stmt;
                 }
                 $current = '';
@@ -222,6 +225,9 @@ switch ($action) {
                 $errors[] = substr($e->getMessage(), 0, 200);
             }
         }
+
+        // Re-enable FK checks
+        $db->exec("SET FOREIGN_KEY_CHECKS = 1");
 
         echo json_encode([
             'success' => count($errors) === 0,
