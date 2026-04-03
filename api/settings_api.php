@@ -112,6 +112,21 @@ switch ($action) {
         break;
     }
 
+    // ── Git pull (deploy latest from GitHub) ───────────────
+    case 'git_pull': {
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }
+        $root = realpath(__DIR__ . '/..');
+        $output = [];
+        $code   = 0;
+        exec("cd " . escapeshellarg($root) . " && git pull 2>&1", $output, $code);
+        echo json_encode([
+            'success' => $code === 0,
+            'output'  => implode("\n", $output),
+            'code'    => $code
+        ]);
+        break;
+    }
+
     default:
         echo json_encode(['error' => 'Unknown action']);
 }
