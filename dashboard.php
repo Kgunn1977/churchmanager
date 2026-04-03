@@ -15,7 +15,7 @@ $db = getDB();
                 <?= htmlspecialchars(explode(' ', $currentUser['name'])[0]) ?>!
             </h2>
             <p class="text-gray-500 text-sm mt-1">
-                <?= date('l, F j, Y') ?> &mdash; Here's your facility overview.
+                <?= date('l, F j, Y') ?> &mdash; Here's your facility overview. Deployed via Git Pull!
             </p>
         </div>
 
