@@ -16,6 +16,9 @@ desktop.ini
 # Claude project files
 /.claude/
 
+# Local dev scripts
+push.bat
+
 # IDE
 .vscode/
 .idea/
