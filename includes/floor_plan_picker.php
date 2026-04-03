@@ -264,8 +264,8 @@ class FloorPlanPicker {
         if (list) list.innerHTML = '<div class="fp-loading">Loading\u2026</div>';
         try {
             const url = this._bldFilter
-                ? `/api/floor_editor_api.php?action=get_building_floors_rooms&building_id=${this._bldFilter}`
-                : '/api/floor_editor_api.php?action=get_all_floors_rooms';
+                ? `${BASE_PATH}/api/floor_editor_api.php?action=get_building_floors_rooms&building_id=${this._bldFilter}`
+                : BASE_PATH + '/api/floor_editor_api.php?action=get_all_floors_rooms';
             this._floors = await fetch(url).then(r => r.json());
         } catch(e) { this._floors = []; }
         this._render();

@@ -183,7 +183,7 @@ document.getElementById('j-date').value = fmtDate(new Date());
 // ═══════════════════════════════════════════════════════════
 function loadAssignments() {
     const date = document.getElementById('j-date').value;
-    fetch(`/api/tasks_api.php?action=get_janitor_assignments&date=${date}&user_id=${getActiveUserId()}`)
+    fetch(`${BASE_PATH}/api/tasks_api.php?action=get_janitor_assignments&date=${date}&user_id=${getActiveUserId()}`)
         .then(r => r.json())
         .then(assignments => {
             renderSummary(assignments);

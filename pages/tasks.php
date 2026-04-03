@@ -1797,7 +1797,7 @@ function loadParentGroupOptions(excludeId) {
 // HELPERS
 // ═══════════════════════════════════════════════════════════
 function api(action, params = {}) {
-    return fetch(`/api/tasks_api.php?${new URLSearchParams({action, ...params})}`).then(r => r.json());
+    return fetch(`${BASE_PATH}/api/tasks_api.php?${new URLSearchParams({action, ...params})}`).then(r => r.json());
 }
 function postApi(fd) {
     return fetch(BASE_PATH + '/api/tasks_api.php', { method: 'POST', body: fd }).then(r => r.json());

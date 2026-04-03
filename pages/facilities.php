@@ -284,7 +284,7 @@ $fp_buildings = $buildings;
 // ─────────────────────────────────────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────────────────────────────────────
-const API = '/api/floor_editor_api.php';
+const API = BASE_PATH + '/api/floor_editor_api.php';
 
 // Buildings list (PHP-injected, kept in sync as buildings are created)
 let facBuildings = <?= json_encode(array_map(fn($b) => ['id' => (int)$b['id'], 'name' => $b['name']], $buildings)) ?>;

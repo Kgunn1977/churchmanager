@@ -386,7 +386,7 @@ async function loadCalendar() {
     const endDate = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
 
     const roomParam = selectedRoomIds.size > 0 ? `&room_ids=${[...selectedRoomIds].join(',')}` : '';
-    const r = await fetch(`/api/scheduling_api.php?action=get_calendar&start_date=${startDate}&end_date=${endDate}${roomParam}`);
+    const r = await fetch(`${BASE_PATH}/api/scheduling_api.php?action=get_calendar&start_date=${startDate}&end_date=${endDate}${roomParam}`);
     calendarAssignments = await r.json();
 
     renderCalendar();
@@ -483,9 +483,9 @@ function closeDayDetail() {
 async function loadSchedules() {
     let url;
     if (selectedRoomIds.size > 0) {
-        url = `/api/scheduling_api.php?action=get_schedules_for_rooms&room_ids=${[...selectedRoomIds].join(',')}`;
+        url = `${BASE_PATH}/api/scheduling_api.php?action=get_schedules_for_rooms&room_ids=${[...selectedRoomIds].join(',')}`;
     } else {
-        url = '/api/scheduling_api.php?action=get_schedules';
+        url = BASE_PATH + '/api/scheduling_api.php?action=get_schedules';
     }
     const r = await fetch(url);
     schedules = await r.json();
@@ -585,14 +585,14 @@ function toggleSchedCard(el) {
         const promises = [];
         tgIds.forEach(id => {
             promises.push(
-                fetch(`/api/tasks_api.php?action=get_group_tree&group_id=${id}`)
+                fetch(`${BASE_PATH}/api/tasks_api.php?action=get_group_tree&group_id=${id}`)
                     .then(r => r.json())
                     .then(tree => ({ type: 'group', data: tree }))
             );
         });
         tIds.forEach(id => {
             promises.push(
-                fetch(`/api/tasks_api.php?action=get_task&id=${id}`)
+                fetch(`${BASE_PATH}/api/tasks_api.php?action=get_task&id=${id}`)
                     .then(r => r.json())
                     .then(task => ({ type: 'task', data: task }))
             );
