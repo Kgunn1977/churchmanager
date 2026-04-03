@@ -7,9 +7,15 @@ if (!isAdmin()) { header('Location: ' . url('/pages/reservations.php')); exit; }
 
 <div class="max-w-4xl mx-auto px-4 py-8">
 
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-800">V1.0 Roadmap</h1>
-        <p class="text-gray-500 text-sm mt-1">Development phases to reach beta release.</p>
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">V1.0 Roadmap</h1>
+            <p class="text-gray-500 text-sm mt-1">Development phases to reach beta release.</p>
+        </div>
+        <a href="<?= url('/Church_Facility_Manager_Roadmap_v1.0.docx') ?>" download class="border border-gray-300 hover:bg-gray-50 text-gray-600 rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Download .docx
+        </a>
     </div>
 
     <!-- Phase 1 -->
