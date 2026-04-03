@@ -1,5 +1,5 @@
 -- Church Facility Manager DB Snapshot
--- Generated: 2026-04-04 00:17:33
+-- Generated: 2026-04-04 00:36:07
 -- Source: DESKTOP-57SPTNP
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -193,7 +193,7 @@ INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_
 INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_id`, `assigned_date`, `deadline`, `reservation_id`, `assigned_to`, `status`, `completed_at`, `created_at`, `schedule_id`) VALUES ('30', '1', NULL, '72', '2026-04-13', '2026-04-13 16:00:00', NULL, '19', 'pending', NULL, '2026-04-03 15:11:19', '4');
 INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_id`, `assigned_date`, `deadline`, `reservation_id`, `assigned_to`, `status`, `completed_at`, `created_at`, `schedule_id`) VALUES ('31', '1', NULL, '72', '2026-04-17', '2026-04-17 16:00:00', NULL, '18', 'pending', NULL, '2026-04-03 15:11:19', '4');
 INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_id`, `assigned_date`, `deadline`, `reservation_id`, `assigned_to`, `status`, `completed_at`, `created_at`, `schedule_id`) VALUES ('32', '1', NULL, '72', '2026-04-17', '2026-04-17 16:00:00', NULL, '19', 'pending', NULL, '2026-04-03 15:11:20', '4');
-INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_id`, `assigned_date`, `deadline`, `reservation_id`, `assigned_to`, `status`, `completed_at`, `created_at`, `schedule_id`) VALUES ('33', '1', NULL, '128', '2026-04-06', '2026-04-06 16:00:00', NULL, '18', 'pending', NULL, '2026-04-03 15:11:20', '5');
+INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_id`, `assigned_date`, `deadline`, `reservation_id`, `assigned_to`, `status`, `completed_at`, `created_at`, `schedule_id`) VALUES ('33', '1', NULL, '128', '2026-04-06', '2026-04-06 16:00:00', NULL, '18', 'in_progress', NULL, '2026-04-03 15:11:20', '5');
 INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_id`, `assigned_date`, `deadline`, `reservation_id`, `assigned_to`, `status`, `completed_at`, `created_at`, `schedule_id`) VALUES ('34', '1', NULL, '128', '2026-04-06', '2026-04-06 16:00:00', NULL, '19', 'pending', NULL, '2026-04-03 15:11:20', '5');
 INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_id`, `assigned_date`, `deadline`, `reservation_id`, `assigned_to`, `status`, `completed_at`, `created_at`, `schedule_id`) VALUES ('35', '1', NULL, '128', '2026-04-10', '2026-04-10 16:00:00', NULL, '18', 'pending', NULL, '2026-04-03 15:11:20', '5');
 INSERT INTO `janitor_task_assignments` (`id`, `task_group_id`, `task_id`, `room_id`, `assigned_date`, `deadline`, `reservation_id`, `assigned_to`, `status`, `completed_at`, `created_at`, `schedule_id`) VALUES ('36', '1', NULL, '128', '2026-04-10', '2026-04-10 16:00:00', NULL, '19', 'pending', NULL, '2026-04-03 15:11:20', '5');
