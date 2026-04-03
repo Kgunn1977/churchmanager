@@ -25,7 +25,7 @@ h1{font-size:20px;color:#111827;margin-bottom:4px}
 <div class="card">
     <div class="badge">My Tasks — PWA</div>
     <h1>Scan to Open</h1>
-    <p class="url">http://64.99.111.112:8080/pwa/install.php</p>
+    <p class="url">https://kg-fire.com/churchmanager/pwa/install.php</p>
     <div id="qr"></div>
     <div class="instructions">
         <strong>iPhone:</strong> Open Camera → point at code<br>
@@ -36,7 +36,7 @@ h1{font-size:20px;color:#111827;margin-bottom:4px}
 </div>
 <script>
 var qr = qrcode(0, 'M');
-qr.addData('http://64.99.111.112:8080/pwa/install.php');
+qr.addData('https://kg-fire.com/churchmanager/pwa/install.php');
 qr.make();
 document.getElementById('qr').innerHTML = qr.createSvgTag(8, 0);
 </script>
