@@ -578,7 +578,7 @@ const picker = new FloorPlanPicker({
 });
 
 // Load linked groups and pass to picker
-fetch('/api/room_links_api.php?action=get_links')
+fetch(BASE_PATH + '/api/room_links_api.php?action=get_links')
     .then(r => r.json())
     .then(links => picker.setLinkedGroups(links));
 
@@ -1210,7 +1210,7 @@ function api(action, params={}) {
     return fetch(`/api/reservations_api.php?${new URLSearchParams({action,...params})}`).then(r=>r.json());
 }
 function postApi(formData) {
-    return fetch('/api/reservations_api.php',{method:'POST',body:formData}).then(r=>r.json());
+    return fetch(BASE_PATH + '/api/reservations_api.php',{method:'POST',body:formData}).then(r=>r.json());
 }
 function fmtDate(d) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;

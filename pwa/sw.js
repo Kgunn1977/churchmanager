@@ -1,9 +1,11 @@
+// Extract BASE_PATH from query parameter passed during registration
+const BASE_PATH = new URL(self.location).searchParams.get('base') || '';
 const CACHE_NAME = 'cfm-tasks-v1';
 const STATIC_ASSETS = [
-    '/pwa/',
-    '/pwa/manifest.json',
-    '/pwa/icons/icon-192.svg',
-    '/pwa/icons/icon-512.svg'
+    BASE_PATH + '/pwa/',
+    BASE_PATH + '/pwa/manifest.php',
+    BASE_PATH + '/pwa/icons/icon-192.svg',
+    BASE_PATH + '/pwa/icons/icon-512.svg'
 ];
 
 // ═══════════════════════════════════════════════════════════
@@ -35,7 +37,7 @@ self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
 
     // API calls: network-first, fall back to cache
-    if (url.pathname.startsWith('/api/')) {
+    if (url.pathname.startsWith(BASE_PATH + '/api/')) {
         e.respondWith(
             fetch(e.request)
                 .then(response => {

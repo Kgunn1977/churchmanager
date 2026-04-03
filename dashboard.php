@@ -23,7 +23,7 @@ $db = getDB();
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
 
             <!-- Facilities -->
-            <a href="/pages/facilities.php" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-blue-200">
+            <a href="<?= url('/pages/facilities.php') ?>" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-blue-200">
                 <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-200 transition">
                     <svg class="w-6 h-6 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -35,7 +35,7 @@ $db = getDB();
             </a>
 
             <!-- Reservations -->
-            <a href="/pages/reservations.php" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-blue-200">
+            <a href="<?= url('/pages/reservations.php') ?>" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-blue-200">
                 <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-200 transition">
                     <svg class="w-6 h-6 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -47,7 +47,7 @@ $db = getDB();
             </a>
 
             <!-- Tasks -->
-            <a href="/pages/tasks.php" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-red-200">
+            <a href="<?= url('/pages/tasks.php') ?>" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-red-200">
                 <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-red-200 transition">
                     <svg class="w-6 h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -59,7 +59,7 @@ $db = getDB();
             </a>
 
             <!-- Janitor -->
-            <a href="/pages/janitor.php" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-indigo-200">
+            <a href="<?= url('/pages/janitor.php') ?>" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-indigo-200">
                 <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition">
                     <svg class="w-6 h-6 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -71,7 +71,7 @@ $db = getDB();
             </a>
 
             <!-- Scheduling -->
-            <a href="/pages/scheduling.php" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-green-200">
+            <a href="<?= url('/pages/scheduling.php') ?>" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-green-200">
                 <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-green-200 transition">
                     <svg class="w-6 h-6 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -110,7 +110,7 @@ $db = getDB();
             </a>
 
             <!-- Equipment -->
-            <a href="/pages/equipment_catalog.php" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-yellow-200">
+            <a href="<?= url('/pages/equipment_catalog.php') ?>" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-yellow-200">
                 <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-yellow-200 transition">
                     <svg class="w-6 h-6 text-yellow-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -123,7 +123,7 @@ $db = getDB();
 
             <!-- Users (admin only) -->
             <?php if (isAdmin()): ?>
-            <a href="/pages/users.php" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-gray-300">
+            <a href="<?= url('/pages/users.php') ?>" class="group bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition border border-transparent hover:border-gray-300">
                 <div class="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-gray-200 transition">
                     <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

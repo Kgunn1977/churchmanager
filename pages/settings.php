@@ -2,7 +2,7 @@
 $pageTitle = 'Settings — Church Facility Manager';
 require_once __DIR__ . '/../includes/nav.php';
 require_once __DIR__ . '/../config/database.php';
-if (!isAdmin()) { header('Location: /dashboard.php'); exit; }
+if (!isAdmin()) { header('Location: ' . url('/dashboard.php')); exit; }
 $db = getDB();
 ?>
 
@@ -112,7 +112,7 @@ loadSettings();
 loadTaskTypes();
 
 async function loadSettings() {
-    const r = await fetch('/api/settings_api.php?action=get_all');
+    const r = await fetch(BASE_PATH + '/api/settings_api.php?action=get_all');
     const s = await r.json();
     if (s.schedule_generation_days) document.getElementById('set-gen-days').value = s.schedule_generation_days;
     if (s.scheduling_mode) document.getElementById('set-sched-mode').value = s.scheduling_mode;
@@ -125,7 +125,7 @@ async function saveSchedulingSettings() {
         scheduling_mode: document.getElementById('set-sched-mode').value,
         default_deadline_time: document.getElementById('set-default-deadline').value,
     };
-    const r = await fetch('/api/settings_api.php', {
+    const r = await fetch(BASE_PATH + '/api/settings_api.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ action: 'bulk_update', settings })
@@ -139,7 +139,7 @@ async function saveSchedulingSettings() {
 // TASK TYPES
 // ═══════════════════════════════════════════════════════════
 async function loadTaskTypes() {
-    const r = await fetch('/api/settings_api.php?action=get_task_types');
+    const r = await fetch(BASE_PATH + '/api/settings_api.php?action=get_task_types');
     taskTypes = await r.json();
     renderTaskTypes();
 }
@@ -176,7 +176,7 @@ async function typeDrop(e, targetIdx) {
 
     // Save new order
     const orders = taskTypes.map((t, i) => ({ id: t.id, priority_order: i + 1 }));
-    await fetch('/api/settings_api.php', {
+    await fetch(BASE_PATH + '/api/settings_api.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ action: 'reorder_task_types', orders })
@@ -200,7 +200,7 @@ async function saveTaskType() {
     const name = document.getElementById('tf-name').value.trim();
     if (!name) { alert('Name is required'); return; }
 
-    const r = await fetch('/api/settings_api.php', {
+    const r = await fetch(BASE_PATH + '/api/settings_api.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ action: 'save_task_type', id, name, priority_order: id ? undefined : taskTypes.length + 1 })
@@ -215,7 +215,7 @@ async function saveTaskType() {
 async function deleteTaskType() {
     if (!confirm('Delete this task type? Tasks using it must be reassigned first.')) return;
     const id = parseInt(document.getElementById('tf-id').value);
-    const r = await fetch('/api/settings_api.php', {
+    const r = await fetch(BASE_PATH + '/api/settings_api.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ action: 'delete_task_type', id })

@@ -347,7 +347,7 @@ loadCalendar();
 loadSchedules();
 
 async function fetchLookups() {
-    const r = await fetch('/api/scheduling_api.php?action=get_lookups');
+    const r = await fetch(BASE_PATH + '/api/scheduling_api.php?action=get_lookups');
     lookups = await r.json();
     populateWorkerDropdown();
     populateTaskGroupCheckboxes();
@@ -1022,7 +1022,7 @@ async function saveSchedule() {
         task_ids: taskIds,
     };
 
-    const r = await fetch('/api/scheduling_api.php', {
+    const r = await fetch(BASE_PATH + '/api/scheduling_api.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(body)
@@ -1041,7 +1041,7 @@ async function saveSchedule() {
 async function deleteSchedule() {
     if (!confirm('Delete this schedule? Pending future assignments will be removed. Completed or in-progress work is preserved.')) return;
     const id = parseInt(document.getElementById('sf-id').value);
-    await fetch('/api/scheduling_api.php', {
+    await fetch(BASE_PATH + '/api/scheduling_api.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ action: 'delete_schedule', id })
@@ -1059,7 +1059,7 @@ async function generateAssignments() {
     btn.disabled = true;
     btn.textContent = 'Generating...';
 
-    const r = await fetch('/api/scheduling_api.php', {
+    const r = await fetch(BASE_PATH + '/api/scheduling_api.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ action: 'generate_assignments' })

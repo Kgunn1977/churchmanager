@@ -91,8 +91,8 @@ $db = getDB();
     }
     echo '</div>';
     echo '<div class="mt-6 flex gap-3">';
-    echo '<a href="/pages/scheduling.php" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition">Go to Scheduling</a>';
-    echo '<a href="/pages/settings.php" class="border border-gray-300 hover:bg-gray-50 text-gray-600 rounded-lg px-4 py-2 text-sm transition">Go to Settings</a>';
+    echo '<a href="' . url('/pages/scheduling.php') . '" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition">Go to Scheduling</a>';
+    echo '<a href="' . url('/pages/settings.php') . '" class="border border-gray-300 hover:bg-gray-50 text-gray-600 rounded-lg px-4 py-2 text-sm transition">Go to Settings</a>';
     echo '</div>';
 
 else: ?>

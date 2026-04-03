@@ -2,8 +2,8 @@
 require_once 'includes/auth.php';
 
 if (isLoggedIn()) {
-    header('Location: /dashboard.php');
+    header('Location: ' . url('/dashboard.php'));
 } else {
-    header('Location: /login.php');
+    header('Location: ' . url('/login.php'));
 }
 exit;

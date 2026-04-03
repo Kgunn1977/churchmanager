@@ -118,11 +118,11 @@ const typePluralForms = {
 };
 
 async function apiGet(action) {
-    const r = await fetch('/api/catalog_api.php?action=' + action + '&type=' + currentType);
+    const r = await fetch(BASE_PATH + '/api/catalog_api.php?action=' + action + '&type=' + currentType);
     return r.json();
 }
 async function apiPost(action, data) {
-    const r = await fetch('/api/catalog_api.php', {
+    const r = await fetch(BASE_PATH + '/api/catalog_api.php', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ action, type: currentType, ...data })
     });

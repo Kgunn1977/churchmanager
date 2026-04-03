@@ -350,7 +350,7 @@ function toggleCheck(assignmentId, taskId, checked) {
     fd.set('assignment_id', assignmentId);
     fd.set('task_id', taskId);
     fd.set('completed', checked ? 1 : 0);
-    fetch('/api/tasks_api.php', { method: 'POST', body: fd })
+    fetch(BASE_PATH + '/api/tasks_api.php', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(r => {
             if (!r.success) return;

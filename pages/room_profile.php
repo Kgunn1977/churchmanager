@@ -6,7 +6,7 @@ requireLogin();
 
 $db     = getDB();
 $roomId = (int)($_GET['room_id'] ?? 0);
-if (!$roomId) { header('Location: /pages/facilities.php'); exit; }
+if (!$roomId) { header('Location: ' . url('/pages/facilities.php')); exit; }
 
 $stmt = $db->prepare("
     SELECT r.*, f.name AS floor_name, f.id AS floor_id, b.name AS building_name, b.id AS building_id
@@ -17,7 +17,7 @@ $stmt = $db->prepare("
 ");
 $stmt->execute([$roomId]);
 $room = $stmt->fetch();
-if (!$room) { header('Location: /pages/facilities.php'); exit; }
+if (!$room) { header('Location: ' . url('/pages/facilities.php')); exit; }
 
 $success = $_GET['saved'] ?? null;
 $tab     = $_GET['tab']   ?? 'equipment';
@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    ->execute([$roomId, $eqId, $qty, $movable, $note]);
             } catch (PDOException $e) {}
         }
-        header("Location: /pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1"); exit;
+        header("Location: " . url("/pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1")); exit;
     }
 
     if ($type === 'create_and_add_equipment') {
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           ON DUPLICATE KEY UPDATE quantity=VALUES(quantity), is_movable=VALUES(is_movable), notes=VALUES(notes)")
                ->execute([$roomId, $eqId, $qty, $movable, $note]);
         }
-        header("Location: /pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1"); exit;
+        header("Location: " . url("/pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1")); exit;
     }
 
     if ($type === 'update_equipment') {
@@ -68,13 +68,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $movable = isset($_POST['is_movable']) ? 1 : 0;
         $note    = trim($_POST['notes'] ?? '');
         $db->prepare("UPDATE room_equipment SET quantity=?, is_movable=?, notes=? WHERE id=? AND room_id=?")->execute([$qty, $movable, $note, $reId, $roomId]);
-        header("Location: /pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1"); exit;
+        header("Location: " . url("/pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1")); exit;
     }
 
     if ($type === 'remove_equipment') {
         $reId = (int)($_POST['re_id'] ?? 0);
         $db->prepare("DELETE FROM room_equipment WHERE id=? AND room_id=?")->execute([$reId, $roomId]);
-        header("Location: /pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1"); exit;
+        header("Location: " . url("/pages/room_profile.php?room_id=$roomId&tab=equipment&saved=1")); exit;
     }
 
 
@@ -111,11 +111,11 @@ if ($assignedTasks) {
 <main class="max-w-5xl mx-auto px-4 py-8">
 
     <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
-        <a href="/pages/facilities.php" class="hover:text-blue-600">Buildings</a>
+        <a href="<?= url('/pages/facilities.php') ?>" class="hover:text-blue-600">Buildings</a>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        <a href="/pages/facilities.php?building_id=<?= $room['building_id'] ?>" class="hover:text-blue-600"><?= htmlspecialchars($room['building_name']) ?></a>
+        <a href="<?= url('/pages/facilities.php?building_id=' . $room['building_id']) ?>" class="hover:text-blue-600"><?= htmlspecialchars($room['building_name']) ?></a>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        <a href="/pages/facilities.php?floor_id=<?= $room['floor_id'] ?>&building_id=<?= $room['building_id'] ?>" class="hover:text-blue-600"><?= htmlspecialchars($room['floor_name']) ?></a>
+        <a href="<?= url('/pages/facilities.php?floor_id=' . $room['floor_id'] . '&building_id=' . $room['building_id']) ?>" class="hover:text-blue-600"><?= htmlspecialchars($room['floor_name']) ?></a>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         <span class="text-blue-700 font-medium"><?= htmlspecialchars($room['name']) ?></span>
     </nav>
@@ -204,11 +204,11 @@ if ($assignedTasks) {
     <div class="bg-white rounded-2xl shadow-sm p-6 border border-transparent">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-bold text-gray-800">Tasks</h2>
-            <a href="/pages/tasks.php" class="text-blue-600 hover:text-blue-700 text-sm font-semibold">
+            <a href="<?= url('/pages/tasks.php') ?>" class="text-blue-600 hover:text-blue-700 text-sm font-semibold">
                 Manage Tasks →
             </a>
         </div>
-        <p class="text-gray-500 text-sm">Task assignments for this room are managed from the <a href="/pages/tasks.php" class="text-blue-600 hover:underline">Tasks page</a>.</p>
+        <p class="text-gray-500 text-sm">Task assignments for this room are managed from the <a href="<?= url('/pages/tasks.php') ?>" class="text-blue-600 hover:underline">Tasks page</a>.</p>
     </div>
 </main>
 

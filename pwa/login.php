@@ -1,18 +1,19 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/app.php';
 
 // Handle logout — clear session manually so we can redirect to PWA login
 if (isset($_GET['logout'])) {
     session_unset();
     session_destroy();
-    header('Location: /pwa/login.php');
+    header('Location: ' . url('/pwa/login.php'));
     exit;
 }
 
 // Already logged in — go to PWA home
 if (isLoggedIn()) {
-    header('Location: /pwa/');
+    header('Location: ' . url('/pwa/'));
     exit;
 }
 
@@ -32,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user && password_verify($password, $user['password'])) {
             loginUser($user);
             // Send to install page if they haven't installed yet, otherwise straight to app
-            $dest = isset($_COOKIE['cfm_pwa_seen']) ? '/pwa/' : '/pwa/install.php';
+            $dest = url(isset($_COOKIE['cfm_pwa_seen']) ? '/pwa/' : '/pwa/install.php');
             header('Location: ' . $dest);
             exit;
         } else {
@@ -49,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="theme-color" content="#1e3a5f">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Sign In — My Tasks</title>
-    <link rel="manifest" href="/pwa/manifest.json">
+    <link rel="manifest" href="<?= url('/pwa/manifest.php') ?>">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -125,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
 
-            <form method="POST" action="/pwa/login.php" novalidate>
+            <form method="POST" action="<?= url('/pwa/login.php') ?>" novalidate>
                 <div class="field">
                     <label for="email">Email</label>
                     <input type="email" id="email" name="email" placeholder="you@yourchurch.org"

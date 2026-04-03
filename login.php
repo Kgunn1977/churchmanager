@@ -4,7 +4,7 @@ require_once 'config/database.php';
 
 // Already logged in — go to dashboard
 if (isLoggedIn()) {
-    header('Location: /dashboard.php');
+    header('Location: ' . url('/dashboard.php'));
     exit;
 }
 
@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password'])) {
             loginUser($user);
-            header('Location: /dashboard.php');
+            header('Location: ' . url('/dashboard.php'));
             exit;
         } else {
             $error = 'Incorrect email or password. Please try again.';
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
 
-            <form method="POST" action="/login.php" novalidate>
+            <form method="POST" action="<?= url('/login.php') ?>" novalidate>
 
                 <!-- Email -->
                 <div class="mb-5">

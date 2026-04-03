@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes'
         echo "<p class='mb-2'>{$icon} <span class='text-sm'>" . htmlspecialchars($r['sql']) . "</span></p>";
         if (!$r['ok'] && isset($r['err'])) echo "<p class='text-red-600 text-sm ml-6'>" . htmlspecialchars($r['err']) . "</p>";
     }
-    echo '<a href="/pages/supplies.php" class="inline-block mt-4 bg-blue-600 text-white rounded-lg px-4 py-2 font-bold text-sm hover:bg-blue-700">Go to Supplies</a>';
+    echo '<a href="' . url('/pages/supplies.php') . '" class="inline-block mt-4 bg-blue-600 text-white rounded-lg px-4 py-2 font-bold text-sm hover:bg-blue-700">Go to Supplies</a>';
     echo '</div></body></html>';
     exit;
 }

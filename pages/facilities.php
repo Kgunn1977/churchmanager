@@ -1114,7 +1114,7 @@ const facPicker = new FloorPlanPicker({
 });
 
 async function loadLinkedGroups() {
-    const res = await fetch('/api/room_links_api.php?action=get_links');
+    const res = await fetch(BASE_PATH + '/api/room_links_api.php?action=get_links');
     linkedGroups = await res.json();
     facPicker.setLinkedGroups(linkedGroups);
     updateLinkButtons();
@@ -1177,7 +1177,7 @@ async function confirmLink() {
     body.append('building_id', bldId);
     body.append('room_ids',    JSON.stringify(ids));
 
-    const res  = await fetch('/api/room_links_api.php', { method: 'POST', body });
+    const res  = await fetch(BASE_PATH + '/api/room_links_api.php', { method: 'POST', body });
     const data = await res.json();
     if (data.error) { alert('Error: ' + data.error); return; }
 
@@ -1209,7 +1209,7 @@ async function doUnlink() {
         const body = new FormData();
         body.append('action',  'delete_link');
         body.append('link_id', linkId);
-        const res  = await fetch('/api/room_links_api.php', { method: 'POST', body });
+        const res  = await fetch(BASE_PATH + '/api/room_links_api.php', { method: 'POST', body });
         const data = await res.json();
         if (data.error) { alert('Error: ' + data.error); return; }
     }

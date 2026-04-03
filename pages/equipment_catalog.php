@@ -306,11 +306,11 @@ let _programmaticSelect = false; // flag to distinguish selectRooms from user cl
 // API helpers
 // ═══════════════════════════════════════════════════════════
 async function apiGet(action, params = '') {
-    const res = await fetch('/api/equipment_api.php?action=' + action + (params ? '&' + params : ''));
+    const res = await fetch(BASE_PATH + '/api/equipment_api.php?action=' + action + (params ? '&' + params : ''));
     return res.json();
 }
 async function apiPost(action, data) {
-    const res = await fetch('/api/equipment_api.php', {
+    const res = await fetch(BASE_PATH + '/api/equipment_api.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...data })
@@ -654,7 +654,7 @@ const eqPicker = new FloorPlanPicker({
 // Load linked groups
 (async () => {
     try {
-        const res = await fetch('/api/room_links_api.php?action=get_links');
+        const res = await fetch(BASE_PATH + '/api/room_links_api.php?action=get_links');
         const groups = await res.json();
         eqPicker.setLinkedGroups(groups);
     } catch(e) {}

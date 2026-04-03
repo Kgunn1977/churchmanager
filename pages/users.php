@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $db->prepare("INSERT INTO users (name, title, email, password, role) VALUES (?, ?, ?, ?, ?)");
                 $stmt->execute([$name, $title, $email, $hash, $role]);
-                header('Location: /pages/users.php?saved=1');
+                header('Location: ' . url('/pages/users.php?saved=1'));
                 exit;
             }
         }
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    ->execute([$name, $title, $role, $active, $id]);
             }
             if (!$error) {
-                header('Location: /pages/users.php?saved=1');
+                header('Location: ' . url('/pages/users.php?saved=1'));
                 exit;
             }
         }
@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id !== (int)$currentUser['id']) {
             $db->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);
         }
-        header('Location: /pages/users.php?saved=1');
+        header('Location: ' . url('/pages/users.php?saved=1'));
         exit;
     }
 }

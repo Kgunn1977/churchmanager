@@ -2,7 +2,7 @@
 $pageTitle = 'Migration: Task Group Hierarchy & Reusable Flag — Church Facility Manager';
 require_once __DIR__ . '/../includes/nav.php';
 require_once __DIR__ . '/../config/database.php';
-if (!isAdmin()) { header('Location: /dashboard.php'); exit; }
+if (!isAdmin()) { header('Location: ' . url('/dashboard.php')); exit; }
 $db = getDB();
 $ran = false;
 $results = [];
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes'
             <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition">
                 Run Migration
             </button>
-            <a href="/dashboard.php" class="ml-3 text-gray-500 hover:text-gray-700 text-sm">Cancel</a>
+            <a href="<?= url('/dashboard.php') ?>" class="ml-3 text-gray-500 hover:text-gray-700 text-sm">Cancel</a>
         </form>
     <?php else: ?>
         <div class="bg-white rounded-2xl shadow-sm p-6 border border-gray-200 space-y-2">
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes'
             <?php endforeach; ?>
         </div>
         <div class="mt-4">
-            <a href="/pages/tasks.php" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition inline-block">Go to Tasks</a>
+            <a href="<?= url('/pages/tasks.php') ?>" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition inline-block">Go to Tasks</a>
         </div>
     <?php endif; ?>
 </div>

@@ -11,6 +11,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'Church Facility Manager' ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>const BASE_PATH = <?= json_encode(BASE_PATH) ?>;</script>
     <?= $extraHead ?? '' ?>
 </head>
 <body class="bg-gray-100 min-h-screen"<?= isset($bodyAttr) ? ' '.$bodyAttr : '' ?>>
@@ -19,7 +20,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
 
         <!-- Logo -->
-        <a href="/dashboard.php" class="flex items-center gap-2 hover:opacity-80 transition">
+        <a href="<?= url('/dashboard.php') ?>" class="flex items-center gap-2 hover:opacity-80 transition">
             <svg class="w-6 h-6 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
@@ -29,19 +30,19 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
         <!-- Nav Links -->
         <div class="hidden md:flex items-center gap-1 text-sm">
-            <a href="/pages/facilities.php"
+            <a href="<?= url('/pages/facilities.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'facilities.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Facilities
             </a>
-            <a href="/pages/reservations.php"
+            <a href="<?= url('/pages/reservations.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'reservations.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Reservations
             </a>
-            <a href="/pages/janitor.php"
+            <a href="<?= url('/pages/janitor.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'janitor.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Janitor
             </a>
-            <a href="/pages/scheduling.php"
+            <a href="<?= url('/pages/scheduling.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'scheduling.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Scheduling
             </a>
@@ -49,32 +50,32 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                class="px-3 py-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-blue-700 transition">
                 Maintenance
             </a>
-            <a href="/pages/equipment_catalog.php"
+            <a href="<?= url('/pages/equipment_catalog.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'equipment_catalog.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Equipment
             </a>
-            <a href="/pages/tasks.php"
+            <a href="<?= url('/pages/tasks.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'tasks.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Tasks
             </a>
-            <a href="/pages/catalog.php?type=supplies"
+            <a href="<?= url('/pages/catalog.php?type=supplies') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'supplies' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Supplies
             </a>
-            <a href="/pages/catalog.php?type=tools"
+            <a href="<?= url('/pages/catalog.php?type=tools') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'tools' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Tools
             </a>
-            <a href="/pages/catalog.php?type=materials"
+            <a href="<?= url('/pages/catalog.php?type=materials') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'materials' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Materials
             </a>
             <?php if (isAdmin()): ?>
-            <a href="/pages/users.php"
+            <a href="<?= url('/pages/users.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'users.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Users
             </a>
-            <a href="/pages/settings.php"
+            <a href="<?= url('/pages/settings.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'settings.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Settings
             </a>
@@ -89,7 +90,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     <?= htmlspecialchars($currentUser['role']) ?>
                 </span>
             </span>
-            <a href="/logout.php" class="text-blue-200 hover:text-white transition" title="Sign Out">
+            <a href="<?= url('/logout.php') ?>" class="text-blue-200 hover:text-white transition" title="Sign Out">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>

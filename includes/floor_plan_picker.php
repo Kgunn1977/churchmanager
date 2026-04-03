@@ -359,7 +359,7 @@ class FloorPlanPicker {
         list.innerHTML = '';
 
         if (!this._floors.length) {
-            list.innerHTML = '<div class="fp-empty">No floors yet.<br><a href="/pages/facilities.php">Add in Facilities \u2192</a></div>';
+            list.innerHTML = `<div class="fp-empty">No floors yet.<br><a href="${BASE_PATH}/pages/facilities.php">Add in Facilities \u2192</a></div>`;
             return;
         }
 

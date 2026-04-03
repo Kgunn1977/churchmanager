@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../config/app.php';
 if (!isLoggedIn()) {
-    header('Location: /pwa/login.php');
+    header('Location: ' . url('/pwa/login.php'));
     exit;
 }
 $user = getCurrentUser();
@@ -9,8 +10,8 @@ $user = getCurrentUser();
 // If not running as installed PWA, redirect to install page (first visit only)
 // The install page sets a cookie so we don't redirect in a loop
 if (!isset($_COOKIE['cfm_pwa_seen'])) {
-    setcookie('cfm_pwa_seen', '1', time() + 86400 * 365, '/pwa/');
-    header('Location: /pwa/install.php');
+    setcookie('cfm_pwa_seen', '1', time() + 86400 * 365, url('/pwa/'));
+    header('Location: ' . url('/pwa/install.php'));
     exit;
 }
 ?>
@@ -23,8 +24,8 @@ if (!isset($_COOKIE['cfm_pwa_seen'])) {
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e40af">
     <title>My Tasks</title>
-    <link rel="manifest" href="/pwa/manifest.json">
-    <link rel="apple-touch-icon" href="/pwa/icons/icon-192.svg">
+    <link rel="manifest" href="<?= url('/pwa/manifest.php') ?>">
+    <link rel="apple-touch-icon" href="<?= url('/pwa/icons/icon-192.svg') ?>">
     <style>
 /* ═══════════════════════════════════════════════════════════
    RESET & BASE
@@ -226,7 +227,7 @@ html, body {
         </div>
         <div class="top-bar-right">
             <div class="sync-indicator" id="syncDot" title="Online"></div>
-            <button class="logout-btn" onclick="location.href='/pwa/login.php?logout=1'">Sign Out</button>
+            <button class="logout-btn" onclick="location.href=BASE_PATH+'/pwa/login.php?logout=1'">Sign Out</button>
         </div>
     </div>
 
@@ -258,6 +259,7 @@ html, body {
 // ═══════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════
+const BASE_PATH = <?= json_encode(BASE_PATH) ?>;
 const USER_ID = <?= (int)$user['id'] ?>;
 const USER_NAME = <?= json_encode($user['name']) ?>;
 let selectedDate = todayStr();
@@ -268,7 +270,7 @@ let isOnline = navigator.onLine;
 // SERVICE WORKER REGISTRATION
 // ═══════════════════════════════════════════════════════════
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/pwa/sw.js').then(reg => {
+    navigator.serviceWorker.register(BASE_PATH + '/pwa/sw.js?base=' + encodeURIComponent(BASE_PATH)).then(reg => {
         console.log('SW registered:', reg.scope);
     }).catch(err => {
         console.warn('SW registration failed:', err);
@@ -370,7 +372,7 @@ function loadAssignments() {
         dot.className = 'sync-indicator syncing';
     }
 
-    fetch(`/api/tasks_api.php?action=get_janitor_assignments&date=${selectedDate}&user_id=${USER_ID}`)
+    fetch(BASE_PATH + `/api/tasks_api.php?action=get_janitor_assignments&date=${selectedDate}&user_id=${USER_ID}`)
         .then(r => r.json())
         .then(data => {
             assignments = data;
@@ -597,7 +599,7 @@ function toggleCheck(assignmentId, taskId, checked) {
 
     // Send to server (or queue for offline)
     const payload = {
-        url: '/api/tasks_api.php',
+        url: BASE_PATH + '/api/tasks_api.php',
         data: {
             action: 'toggle_checklist_item',
             assignment_id: assignmentId,

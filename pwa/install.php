@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../config/app.php';
 if (!isLoggedIn()) {
-    header('Location: /pwa/login.php');
+    header('Location: ' . url('/pwa/login.php'));
     exit;
 }
 $user = getCurrentUser();
@@ -15,8 +16,8 @@ $user = getCurrentUser();
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e40af">
     <title>Install My Tasks</title>
-    <link rel="manifest" href="/pwa/manifest.json">
-    <link rel="apple-touch-icon" href="/pwa/icons/icon-192.svg">
+    <link rel="manifest" href="<?= url('/pwa/manifest.php') ?>">
+    <link rel="apple-touch-icon" href="<?= url('/pwa/icons/icon-192.svg') ?>">
     <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -147,10 +148,15 @@ h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
         ✓ App is already installed — open it from your home screen
     </div>
 
-    <a href="/pwa/" class="skip" onclick="document.cookie='cfm_pwa_seen=1;path=/pwa/;max-age=31536000'">Continue in browser →</a>
+    <a href="<?= url('/pwa/') ?>" class="skip" onclick="document.cookie='cfm_pwa_seen=1;path=<?= url('/pwa/') ?>;max-age=31536000'">Continue in browser →</a>
 </div>
 
 <script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+const BASE_PATH = <?= json_encode(BASE_PATH) ?>;
+
 // ═══════════════════════════════════════════════════════════
 // DETECT PLATFORM & INSTALL STATE
 // ═══════════════════════════════════════════════════════════
@@ -163,7 +169,7 @@ let deferredPrompt = null;
 if (isStandalone) {
     // Already running as installed PWA — redirect to app
     document.getElementById('installedMsg').style.display = 'block';
-    setTimeout(() => { location.href = '/pwa/'; }, 2000);
+    setTimeout(() => { location.href = BASE_PATH + '/pwa/'; }, 2000);
 } else if (isIOS) {
     // Show iOS manual instructions
     document.getElementById('iosInstructions').style.display = 'block';
@@ -201,7 +207,7 @@ function doInstall() {
         if (result.outcome === 'accepted') {
             document.getElementById('installBtn').style.display = 'none';
             document.getElementById('installedMsg').style.display = 'block';
-            setTimeout(() => { location.href = '/pwa/'; }, 1500);
+            setTimeout(() => { location.href = BASE_PATH + '/pwa/'; }, 1500);
         }
         deferredPrompt = null;
     });
@@ -215,7 +221,7 @@ window.addEventListener('appinstalled', () => {
 
 // Register service worker so the install prompt can fire
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/pwa/sw.js');
+    navigator.serviceWorker.register(BASE_PATH + '/pwa/sw.js?base=' + encodeURIComponent(BASE_PATH));
 }
 </script>
 </body>
