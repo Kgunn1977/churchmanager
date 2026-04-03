@@ -30,58 +30,51 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
         <!-- Nav Links -->
         <div class="hidden md:flex items-center gap-1 text-sm">
-            <a href="<?= url('/pages/facilities.php') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'facilities.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Facilities
-            </a>
             <a href="<?= url('/pages/reservations.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'reservations.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Reservations
+                Calendar
             </a>
             <a href="<?= url('/pages/janitor.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'janitor.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Janitor
+                PWA
             </a>
-            <a href="<?= url('/pages/scheduling.php') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'scheduling.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Scheduling
-            </a>
-            <a href="#"
-               class="px-3 py-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-blue-700 transition">
-                Maintenance
-            </a>
-            <a href="<?= url('/pages/equipment_catalog.php') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'equipment_catalog.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Equipment
-            </a>
+
+            <!-- Scheduling dropdown -->
+            <div class="relative" data-dropdown>
+                <button class="px-3 py-1.5 rounded-lg transition flex items-center gap-1 <?= in_array($currentPage, ['scheduling.php']) ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                    Scheduling
+                    <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div class="nav-dropdown absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[160px] z-50 hidden">
+                    <a href="<?= url('/pages/scheduling.php') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition">Cleaning</a>
+                    <a href="#" class="block px-4 py-2 text-sm text-gray-400 cursor-default">Maintenance</a>
+                </div>
+            </div>
+
             <a href="<?= url('/pages/tasks.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'tasks.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Tasks
             </a>
-            <a href="<?= url('/pages/catalog.php?type=supplies') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'supplies' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Supplies
-            </a>
-            <a href="<?= url('/pages/catalog.php?type=tools') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'tools' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Tools
-            </a>
-            <a href="<?= url('/pages/catalog.php?type=materials') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'materials' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Materials
-            </a>
-            <a href="<?= url('/pages/app.php') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'app.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                App
-            </a>
+
+            <!-- Resources dropdown -->
+            <div class="relative" data-dropdown>
+                <button class="px-3 py-1.5 rounded-lg transition flex items-center gap-1 <?= in_array($currentPage, ['catalog.php','equipment_catalog.php']) ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                    Resources
+                    <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div class="nav-dropdown absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[160px] z-50 hidden">
+                    <a href="<?= url('/pages/equipment_catalog.php') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition">Equipment</a>
+                    <a href="<?= url('/pages/catalog.php?type=supplies') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition">Supplies</a>
+                    <a href="<?= url('/pages/catalog.php?type=tools') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition">Tools</a>
+                    <a href="<?= url('/pages/catalog.php?type=materials') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition">Materials</a>
+                </div>
+            </div>
+
             <?php if (isAdmin()): ?>
-            <a href="<?= url('/pages/users.php') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'users.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Users
-            </a>
             <a href="<?= url('/pages/settings.php') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'settings.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
-                Settings
+               class="px-3 py-1.5 rounded-lg transition <?= in_array($currentPage, ['settings.php','users.php','app.php','facilities.php']) ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>"
+               title="Settings">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             </a>
             <?php endif; ?>
         </div>
@@ -107,4 +100,19 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 <script>
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ── Dropdown menus ──
+document.querySelectorAll('[data-dropdown]').forEach(wrap => {
+    const btn = wrap.querySelector('button');
+    const menu = wrap.querySelector('.nav-dropdown');
+    btn.addEventListener('click', e => {
+        e.stopPropagation();
+        // Close other open dropdowns
+        document.querySelectorAll('.nav-dropdown').forEach(m => { if (m !== menu) m.classList.add('hidden'); });
+        menu.classList.toggle('hidden');
+    });
+});
+document.addEventListener('click', () => {
+    document.querySelectorAll('.nav-dropdown').forEach(m => m.classList.add('hidden'));
+});
 </script>

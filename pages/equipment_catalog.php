@@ -375,16 +375,30 @@ async function onCatItemClick(eqId) {
     // Toggle: clicking the same item again deselects
     if (selectedCatId === eqId) {
         selectedCatId = null;
-        multiRoomMode = false;
         catLocations  = [];
-        eqPicker.clearSelection();
         renderCatalog();
-        renderRoomEquipment(); // restore normal room view
+        // If a room is selected, restore room view; otherwise show empty
+        if (selectedRoomId) {
+            renderRoomEquipment();
+        } else {
+            multiRoomMode = false;
+            eqPicker.clearSelection();
+            renderRoomEquipment();
+        }
         return;
     }
     selectedCatId = eqId;
     renderCatalog();
-    // Fetch rooms where this item is assigned
+
+    // If a room is selected, keep it — just highlight the catalog item
+    if (selectedRoomId) {
+        // Fetch locations for the info panel but don't change room selection
+        catLocations = await apiGet('get_equipment_locations', 'equipment_id=' + eqId);
+        // Keep showing room equipment panel (don't switch to locations view)
+        return;
+    }
+
+    // No room selected — show "where is this item" view
     const locations = await apiGet('get_equipment_locations', 'equipment_id=' + eqId);
     catLocations = locations;
     const roomIds = locations.map(l => l.room_id);
@@ -418,7 +432,7 @@ function renderCatLocations() {
     }
 
     let html = '<div style="display:grid;grid-template-columns:1fr 54px 54px;gap:6px;padding:2px 10px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;">'
-             + '<span>Room</span><span style="text-align:center;">Qty</span><span style="text-align:center;">Move</span></div>';
+             + '<span>Room</span><span style="text-align:center;">Qty</span><span style="text-align:center;">Movable</span></div>';
 
     html += catLocations.map(loc => `
         <div style="display:grid;grid-template-columns:1fr 54px 54px;align-items:center;gap:6px;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:5px;font-size:13px;">
@@ -488,21 +502,9 @@ function renderRoomEquipment() {
     const assignedEqIds = new Set(roomEquipment.map(re => re.equipment_id));
     const available = catalog.filter(c => !assignedEqIds.has(c.id));
 
-    let html = `<div style="position:relative;margin-bottom:8px;">
-        <button class="eq-add-btn" onclick="document.getElementById('eq-add-dropdown').style.display=document.getElementById('eq-add-dropdown').style.display==='block'?'none':'block'" style="width:100%;">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Add Equipment to Room
-        </button>
-        <div id="eq-add-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #d1d5db;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:240px;overflow-y:auto;z-index:100;">
-            ${available.length ? available.map(c => `
-                <div style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;"
-                     onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''"
-                     onclick="document.getElementById('eq-add-dropdown').style.display='none';openAssignModal(${c.id})">
-                    <span style="font-weight:600;color:#1e293b;">${esc(c.name)}</span>
-                    <span style="color:#9ca3af;font-size:11px;">${CAT_LABELS[c.category] || c.category}</span>
-                </div>
-            `).join('') : '<div style="padding:12px;text-align:center;color:#9ca3af;font-size:12px;">All catalog items already assigned</div>'}
-        </div>
+    let html = `<div style="padding:6px 10px 2px;font-size:11px;color:#9ca3af;text-align:center;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline-block;vertical-align:-2px;margin-right:3px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+        Drag items between the catalog and this room
     </div>`;
 
     if (!roomEquipment.length) {
@@ -510,7 +512,7 @@ function renderRoomEquipment() {
     } else {
         // Header row
         html += '<div style="display:grid;grid-template-columns:1fr 54px 54px;gap:6px;padding:2px 10px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;">'
-              + '<span>Item</span><span style="text-align:center;">Qty</span><span style="text-align:center;">Move</span></div>';
+              + '<span>Item</span><span style="text-align:center;">Qty</span><span style="text-align:center;">Movable</span></div>';
 
         html += roomEquipment.map(re => `
             <div class="eq-row" data-id="${re.id}" data-re-id="${re.id}" draggable="true"
@@ -627,13 +629,13 @@ const eqPicker = new FloorPlanPicker({
     onChange     : function(rooms) {
         const ids = Object.keys(rooms).map(Number);
         const isUserClick = !_programmaticSelect;
-        if (isUserClick && selectedCatId) {
-            selectedCatId = null;
+        if (isUserClick) {
+            // User clicked a room — exit multi-room mode but keep catalog selection
             multiRoomMode = false;
-            catLocations  = [];
-            renderCatalog();
         }
-        if (ids.length === 1) {
+        if (ids.length >= 1 && isUserClick) {
+            // User clicked a room (may be a linked group selecting multiple rooms)
+            // — treat as single-room selection using the first room
             selectedRoomId   = ids[0];
             selectedRoomName = Object.values(rooms)[0]?.name || 'Room';
             loadRoomEquipment(selectedRoomId);
@@ -644,7 +646,7 @@ const eqPicker = new FloorPlanPicker({
             multiRoomMode    = false;
             renderRoomEquipment();
         } else {
-            // Multiple rooms selected (from catalog click) — don't load single room
+            // Multiple rooms selected programmatically (from catalog click) — don't load single room
             selectedRoomId   = null;
             selectedRoomName = '';
         }
