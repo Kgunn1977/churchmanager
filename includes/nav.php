@@ -70,6 +70,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'catalog.php' && ($_GET['type'] ?? '') === 'materials' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Materials
             </a>
+            <a href="<?= url('/pages/app.php') ?>"
+               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'app.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                App
+            </a>
             <?php if (isAdmin()): ?>
             <a href="<?= url('/pages/users.php') ?>"
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'users.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
