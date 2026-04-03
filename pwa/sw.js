@@ -1,6 +1,6 @@
 // Extract BASE_PATH from query parameter passed during registration
 const BASE_PATH = new URL(self.location).searchParams.get('base') || '';
-const CACHE_NAME = 'cfm-tasks-v1';
+const CACHE_NAME = 'cfm-tasks-v2';
 const STATIC_ASSETS = [
     BASE_PATH + '/pwa/index.php',
     BASE_PATH + '/pwa/manifest.php',
@@ -35,6 +35,22 @@ self.addEventListener('activate', e => {
 // ═══════════════════════════════════════════════════════════
 self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
+
+    // PHP pages (HTML): network-first, fall back to cache
+    if (url.pathname.endsWith('.php') || url.pathname.endsWith('/')) {
+        e.respondWith(
+            fetch(e.request)
+                .then(response => {
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+                    }
+                    return response;
+                })
+                .catch(() => caches.match(e.request))
+        );
+        return;
+    }
 
     // API calls: network-first, fall back to cache
     if (url.pathname.startsWith(BASE_PATH + '/api/')) {
