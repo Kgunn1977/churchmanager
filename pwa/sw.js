@@ -2,7 +2,7 @@
 const BASE_PATH = new URL(self.location).searchParams.get('base') || '';
 const CACHE_NAME = 'cfm-tasks-v1';
 const STATIC_ASSETS = [
-    BASE_PATH + '/pwa/',
+    BASE_PATH + '/pwa/index.php',
     BASE_PATH + '/pwa/manifest.php',
     BASE_PATH + '/pwa/icons/icon-192.svg',
     BASE_PATH + '/pwa/icons/icon-512.svg'

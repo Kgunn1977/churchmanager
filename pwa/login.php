@@ -13,7 +13,7 @@ if (isset($_GET['logout'])) {
 
 // Already logged in — go to PWA home
 if (isLoggedIn()) {
-    header('Location: ' . url('/pwa/'));
+    header('Location: ' . url('/pwa/index.php'));
     exit;
 }
 
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user && password_verify($password, $user['password'])) {
             loginUser($user);
             // Send to install page if they haven't installed yet, otherwise straight to app
-            $dest = url(isset($_COOKIE['cfm_pwa_seen']) ? '/pwa/' : '/pwa/install.php');
+            $dest = url(isset($_COOKIE['cfm_pwa_seen']) ? '/pwa/index.php' : '/pwa/install.php');
             header('Location: ' . $dest);
             exit;
         } else {

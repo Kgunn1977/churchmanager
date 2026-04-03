@@ -148,7 +148,7 @@ h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
         ✓ App is already installed — open it from your home screen
     </div>
 
-    <a href="<?= url('/pwa/') ?>" class="skip" onclick="document.cookie='cfm_pwa_seen=1;path=<?= url('/pwa/') ?>;max-age=31536000'">Continue in browser →</a>
+    <a href="<?= url('/pwa/index.php') ?>" class="skip" onclick="document.cookie='cfm_pwa_seen=1;path=<?= url('/pwa/') ?>;max-age=31536000'">Continue in browser →</a>
 </div>
 
 <script>
@@ -169,7 +169,7 @@ let deferredPrompt = null;
 if (isStandalone) {
     // Already running as installed PWA — redirect to app
     document.getElementById('installedMsg').style.display = 'block';
-    setTimeout(() => { location.href = BASE_PATH + '/pwa/'; }, 2000);
+    setTimeout(() => { location.href = BASE_PATH + '/pwa/index.php'; }, 2000);
 } else if (isIOS) {
     // Show iOS manual instructions
     document.getElementById('iosInstructions').style.display = 'block';
@@ -207,7 +207,7 @@ function doInstall() {
         if (result.outcome === 'accepted') {
             document.getElementById('installBtn').style.display = 'none';
             document.getElementById('installedMsg').style.display = 'block';
-            setTimeout(() => { location.href = BASE_PATH + '/pwa/'; }, 1500);
+            setTimeout(() => { location.href = BASE_PATH + '/pwa/index.php'; }, 1500);
         }
         deferredPrompt = null;
     });

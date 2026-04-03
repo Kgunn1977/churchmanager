@@ -5,7 +5,7 @@ echo json_encode([
     'name' => 'Church Facility Manager — Tasks',
     'short_name' => 'My Tasks',
     'description' => 'View and complete your assigned facility tasks',
-    'start_url' => url('/pwa/'),
+    'start_url' => url('/pwa/index.php'),
     'display' => 'standalone',
     'background_color' => '#1e40af',
     'theme_color' => '#1e40af',
