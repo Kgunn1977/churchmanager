@@ -9,8 +9,9 @@ Thumbs.db
 desktop.ini
 ~$*
 
-# Config with credentials (keep a template instead)
+# Config files (keep templates instead — these differ per environment)
 /config/database.php
+/config/app.php
 
 # Claude project files
 /.claude/
