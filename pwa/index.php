@@ -471,6 +471,11 @@ html, body {
     </style>
 </head>
 <body>
+<script>
+// Prevent browser scroll restoration after form POST (login) — keeps top bar in view
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+window.scrollTo(0, 0);
+</script>
 <div id="app">
 
     <!-- Top bar -->
