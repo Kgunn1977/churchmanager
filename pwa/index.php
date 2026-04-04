@@ -22,7 +22,14 @@ if (!isLoggedIn() && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pwa_
         $_authUser = $stmt->fetch();
         if ($_authUser && password_verify($password, $_authUser['password'])) {
             loginUser($_authUser);
-            // Fall through — page will render normally as logged in
+            // Do a clean GET reload — a POST response would cause the browser
+            // to restore scroll position to where the login form was, hiding the top bar.
+            echo '<!DOCTYPE html><html><head>';
+            echo '<meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">';
+            echo '</head><body style="background:#1e40af;">';
+            echo '<script>window.location.replace(window.location.pathname);</script>';
+            echo '</body></html>';
+            exit;
         } else {
             $_loginError = 'Incorrect email or password.';
         }
