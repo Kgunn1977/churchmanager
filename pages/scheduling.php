@@ -711,15 +711,47 @@ function renderTaskLibrary() {
 }
 
 function toggleLibGroup(id, checked) {
-    if (checked) libSelectedGroups.add(id); else libSelectedGroups.delete(id);
+    if (checked) {
+        libSelectedGroups.add(id);
+        // Auto-select rooms associated with this task group
+        const tg = lookups.task_groups.find(g => g.id == id);
+        if (tg && tg.room_ids && tg.room_ids.length > 0) {
+            autoSelectRooms(tg.room_ids);
+        }
+    } else {
+        libSelectedGroups.delete(id);
+    }
     updateLibSummary();
     updateNewScheduleBtn();
 }
 
 function toggleLibTask(id, checked) {
-    if (checked) libSelectedTasks.add(id); else libSelectedTasks.delete(id);
+    if (checked) {
+        libSelectedTasks.add(id);
+        // Auto-select rooms associated with this task
+        const t = (lookups.tasks || []).find(t => t.id == id);
+        if (t && t.room_ids && t.room_ids.length > 0) {
+            autoSelectRooms(t.room_ids);
+        }
+    } else {
+        libSelectedTasks.delete(id);
+    }
     updateLibSummary();
     updateNewScheduleBtn();
+}
+
+function autoSelectRooms(roomIds) {
+    // Add to current selection without removing existing ones
+    let changed = false;
+    roomIds.forEach(rid => {
+        if (!selectedRoomIds.has(rid)) {
+            selectedRoomIds.add(rid);
+            changed = true;
+        }
+    });
+    if (changed) {
+        picker.selectRooms([...selectedRoomIds]);
+    }
 }
 
 function updateLibSummary() {

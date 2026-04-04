@@ -524,7 +524,25 @@ switch ($action) {
                    (SELECT COUNT(*) FROM task_group_tasks WHERE task_group_id = tg.id) AS task_count
             FROM task_groups tg ORDER BY tg.name
         ")->fetchAll();
+
+        // Attach room_ids to each task group
+        $stGroupRooms = $db->prepare("SELECT room_id FROM room_default_task_groups WHERE task_group_id = ?");
+        foreach ($taskGroups as &$tg) {
+            $stGroupRooms->execute([$tg['id']]);
+            $tg['room_ids'] = array_map('intval', array_column($stGroupRooms->fetchAll(), 'room_id'));
+        }
+        unset($tg);
+
         $tasks = $db->query("SELECT t.id, t.name, t.reusable, tt.name AS type_name FROM tasks t JOIN task_types tt ON tt.id = t.task_type_id ORDER BY t.name")->fetchAll();
+
+        // Attach room_ids to each task
+        $stTaskRooms = $db->prepare("SELECT room_id FROM task_rooms WHERE task_id = ?");
+        foreach ($tasks as &$t) {
+            $stTaskRooms->execute([$t['id']]);
+            $t['room_ids'] = array_map('intval', array_column($stTaskRooms->fetchAll(), 'room_id'));
+        }
+        unset($t);
+
         $workers = $db->query("SELECT id, name, role FROM users WHERE is_active = 1 ORDER BY name")->fetchAll();
         $roles = [
             ['key' => 'custodial', 'label' => 'Custodial'],

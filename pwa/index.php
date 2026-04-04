@@ -7,6 +7,21 @@ if (!isLoggedIn()) {
 }
 $user = getCurrentUser();
 
+// Load date strip settings
+require_once __DIR__ . '/../config/database.php';
+$_pwaDb = getDB();
+$_pwaStripBack = 3;
+$_pwaStripForward = 10;
+$_pwaSchedMode = 'deadline';
+try {
+    $r = $_pwaDb->query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('pwa_date_strip_back','pwa_date_strip_forward','scheduling_mode')");
+    foreach ($r->fetchAll() as $row) {
+        if ($row['setting_key'] === 'pwa_date_strip_back') $_pwaStripBack = max(0, (int)$row['setting_value']);
+        if ($row['setting_key'] === 'pwa_date_strip_forward') $_pwaStripForward = max(1, (int)$row['setting_value']);
+        if ($row['setting_key'] === 'scheduling_mode') $_pwaSchedMode = $row['setting_value'];
+    }
+} catch (Exception $e) {}
+
 // If not running as installed PWA, redirect to install page (first visit only)
 // The install page sets a cookie so we don't redirect in a loop
 // Skip if loaded in preview iframe (?skipinstall=1)
@@ -110,6 +125,17 @@ html, body {
 }
 .date-chip.selected .task-dot { background: #93c5fd; }
 
+/* Date chip status colors */
+.date-chip.status-complete:not(.selected) { background: #dcfce7; border-color: #86efac; }
+.date-chip.status-complete:not(.selected) .day-num { color: #15803d; }
+.date-chip.status-complete:not(.selected) .day-name { color: #22c55e; }
+.date-chip.status-incomplete-past:not(.selected) { background: #fee2e2; border-color: #fca5a5; }
+.date-chip.status-incomplete-past:not(.selected) .day-num { color: #b91c1c; }
+.date-chip.status-incomplete-past:not(.selected) .day-name { color: #ef4444; }
+.date-chip.status-future:not(.selected) { background: #fef9c3; border-color: #fde68a; }
+.date-chip.status-future:not(.selected) .day-num { color: #a16207; }
+.date-chip.status-future:not(.selected) .day-name { color: #eab308; }
+
 /* ── Summary cards ────────────────────────────────────────── */
 .summary-row {
     display: flex; gap: 8px; padding: 12px 16px; flex-shrink: 0;
@@ -189,7 +215,7 @@ html, body {
     width: 22px; height: 22px; accent-color: #2563eb;
     cursor: pointer; flex-shrink: 0;
 }
-.check-label { font-size: 14px; color: #374151; flex: 1; }
+.check-label { font-size: 14px; color: #374151; flex: 1; cursor: pointer; -webkit-tap-highlight-color: rgba(59,130,246,.15); }
 .check-item.done .check-label {
     text-decoration: line-through; color: #9ca3af;
 }
@@ -248,6 +274,47 @@ html, body {
     font-size: 13px; font-weight: 600; color: #374151; cursor: pointer;
 }
 
+/* ── Task Detail Popup ───────────────────────────────────── */
+.task-detail-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.45); justify-content: center; align-items: flex-end;
+}
+.task-detail-overlay.visible { display: flex; }
+.task-detail-box {
+    background: #fff; border-radius: 20px 20px 0 0; padding: 24px 20px 32px;
+    width: 100%; max-width: 420px; max-height: 75vh; overflow-y: auto;
+    animation: slideUp .25s ease-out;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.task-detail-box h3 {
+    font-size: 17px; font-weight: 800; color: #111827; margin-bottom: 4px;
+}
+.task-detail-box .td-desc {
+    font-size: 13px; color: #6b7280; margin-bottom: 12px; line-height: 1.5;
+}
+.task-detail-box .td-time {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; font-weight: 600; color: #3b82f6; background: #eff6ff;
+    padding: 4px 10px; border-radius: 8px; margin-bottom: 12px;
+}
+.task-detail-box .td-section {
+    font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase;
+    letter-spacing: .05em; margin: 12px 0 6px;
+}
+.task-detail-box .td-list {
+    list-style: none; padding: 0; margin: 0;
+}
+.task-detail-box .td-list li {
+    font-size: 13px; color: #374151; padding: 5px 0;
+    border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 6px;
+}
+.task-detail-box .td-list li:last-child { border-bottom: none; }
+.task-detail-close {
+    display: block; width: 100%; margin-top: 16px; padding: 12px;
+    background: none; border: 1px solid #e5e7eb; border-radius: 12px;
+    font-size: 14px; font-weight: 600; color: #374151; cursor: pointer;
+}
+
 /* ── Toolbar (Sort / Show Hidden) ────────────────────────── */
 .pwa-toolbar {
     display: flex; gap: 8px; padding: 8px 16px; background: #fff;
@@ -302,13 +369,17 @@ html, body {
 
     <!-- Toolbar -->
     <div class="pwa-toolbar">
-        <button id="btnSort" onclick="toggleSort()">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4 4m0 0l4-4m-4 4V4"/></svg>
-            Sort
+        <button id="btnView" onclick="cycleView()">
+            <svg id="viewIcon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            <span id="viewLabel">View</span>
+        </button>
+        <button id="btnCollapse" onclick="toggleCollapseAll()">
+            <svg id="collapseIcon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            <span id="collapseLabel">Collapse</span>
         </button>
         <button id="btnShowHidden" onclick="toggleShowHidden()">
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-            <span id="btnShowHiddenLabel">Show Hidden</span>
+            <span id="btnShowHiddenLabel">Hide</span>
         </button>
     </div>
 
@@ -326,6 +397,11 @@ html, body {
             <div class="cal-grid" id="calGrid"></div>
             <button class="cal-close" onclick="closeCal()">Cancel</button>
         </div>
+    </div>
+
+    <!-- Task detail popup -->
+    <div class="task-detail-overlay" id="taskDetailOverlay" onclick="if(event.target===this)closeTaskDetail()">
+        <div class="task-detail-box" id="taskDetailBox"></div>
     </div>
 
     <!-- Task list -->
@@ -354,8 +430,14 @@ let selectedDate = todayStr();
 let assignments = [];
 let isOnline = navigator.onLine;
 let showHidden = false;
-let sortMode = 'default'; // 'default' | 'room' | 'deadline'
+let viewMode = 'default'; // 'default' | 'rooms' | 'task' | 'resources'
 let stripAnchor = null; // null = anchored to today, else a Date object
+let dateStatuses = {}; // { 'YYYY-MM-DD': 'complete'|'incomplete'|'none' }
+const STRIP_DAYS_BACK = <?= (int)$_pwaStripBack ?>;
+const STRIP_DAYS_FORWARD = <?= (int)$_pwaStripForward ?>;
+const STRIP_TOTAL = STRIP_DAYS_BACK + 1 + STRIP_DAYS_FORWARD;
+const SCHED_MODE = <?= json_encode($_pwaSchedMode) ?>;
+let taskDetailCache = {}; // task_id => checklist item with resources, description, etc.
 
 // ═══════════════════════════════════════════════════════════
 // SERVICE WORKER REGISTRATION
@@ -422,7 +504,7 @@ function renderDateStrip() {
     const today = new Date(); today.setHours(0,0,0,0);
     const anchor = stripAnchor || today;
     const start = new Date(anchor);
-    start.setDate(start.getDate() - 3);
+    start.setDate(start.getDate() - STRIP_DAYS_BACK);
 
     // "more future" chip at end, "back to today" chip if on future anchor
     let html = '';
@@ -435,20 +517,38 @@ function renderDateStrip() {
         </div>`;
     }
 
-    for (let i = 0; i < 14; i++) {
+    const todayDs = todayStr();
+    const rangeStart = fmt(start);
+    const rangeEnd = fmt(new Date(start.getTime() + (STRIP_TOTAL - 1) * 86400000));
+
+    for (let i = 0; i < STRIP_TOTAL; i++) {
         const d = new Date(start);
         d.setDate(d.getDate() + i);
         const ds = fmt(d);
-        const isToday = ds === todayStr();
+        const isToday = ds === todayDs;
         const isSel = ds === selectedDate;
         let cls = 'date-chip';
         if (isSel) cls += ' selected';
         if (isToday && !isSel) cls += ' today';
+
+        // Status coloring
+        const st = dateStatuses[ds];
+        if (st && !isSel) {
+            const isPast = ds < todayDs;
+            const isFuture = ds > todayDs;
+            if (st === 'complete') cls += ' status-complete';
+            else if (st === 'incomplete' && isPast) cls += ' status-incomplete-past';
+            else if (st === 'incomplete' && isFuture) cls += ' status-future';
+        }
+
         html += `<div class="${cls}" onclick="selectDate('${ds}')" data-date="${ds}">
             <span class="day-name">${DAY_NAMES[d.getDay()]}</span>
             <span class="day-num">${d.getDate()}</span>
         </div>`;
     }
+
+    // Fetch date statuses for visible range
+    fetchDateStatuses(rangeStart, rangeEnd);
 
     // "More ▸" chip at the end to open calendar
     html += `<div class="date-chip" onclick="openCal()" style="background:#eff6ff;border-color:#93c5fd;min-width:60px;">
@@ -464,13 +564,45 @@ function renderDateStrip() {
     });
 }
 
+function fetchDateStatuses(startDate, endDate) {
+    if (!navigator.onLine) return;
+    fetch(BASE_PATH + `/api/tasks_api.php?action=get_date_statuses&start=${startDate}&end=${endDate}&user_id=${USER_ID}`)
+        .then(r => r.json())
+        .then(data => {
+            let changed = false;
+            for (const [date, status] of Object.entries(data)) {
+                if (dateStatuses[date] !== status) {
+                    dateStatuses[date] = status;
+                    changed = true;
+                }
+            }
+            if (changed) {
+                // Apply colors to existing chips without full re-render
+                const todayDs = todayStr();
+                document.querySelectorAll('.date-chip[data-date]').forEach(chip => {
+                    const ds = chip.getAttribute('data-date');
+                    const st = dateStatuses[ds];
+                    chip.classList.remove('status-complete', 'status-incomplete-past', 'status-future');
+                    if (st && !chip.classList.contains('selected')) {
+                        const isPast = ds < todayDs;
+                        const isFuture = ds > todayDs;
+                        if (st === 'complete') chip.classList.add('status-complete');
+                        else if (st === 'incomplete' && isPast) chip.classList.add('status-incomplete-past');
+                        else if (st === 'incomplete' && isFuture) chip.classList.add('status-future');
+                    }
+                });
+            }
+        })
+        .catch(() => {});
+}
+
 function selectDate(ds) {
     selectedDate = ds;
     // If the selected date is far from today, set anchor
     const sel = parseDate(ds);
     const today = new Date(); today.setHours(0,0,0,0);
     const diffDays = Math.round((sel - today) / 86400000);
-    if (diffDays > 10) {
+    if (diffDays > STRIP_DAYS_FORWARD) {
         stripAnchor = sel;
     }
     renderDateStrip();
@@ -533,24 +665,127 @@ function calSelect(ds) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// TASK DETAIL POPUP
+// ═══════════════════════════════════════════════════════════
+function openTaskDetail(taskId) {
+    const c = taskDetailCache[taskId];
+    if (!c) return;
+    const box = document.getElementById('taskDetailBox');
+    const r = c.resources || {};
+
+    let html = `<h3>${esc(c.task_name)}</h3>`;
+
+    if (c.task_description) {
+        html += `<div class="td-desc">${esc(c.task_description)}</div>`;
+    }
+
+    if (c.task_minutes && SCHED_MODE !== 'none') {
+        html += `<div class="td-time">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            ${c.task_minutes} min
+        </div>`;
+    }
+
+    const sections = [
+        { key: 'supplies',  label: 'Supplies',  icon: '🧴' },
+        { key: 'tools',     label: 'Tools',      icon: '🔧' },
+        { key: 'materials', label: 'Materials',  icon: '📦' },
+        { key: 'equipment', label: 'Equipment',  icon: '⚙️' },
+    ];
+
+    sections.forEach(s => {
+        const items = r[s.key] || [];
+        if (!items.length) return;
+        html += `<div class="td-section">${s.icon} ${s.label}</div>`;
+        html += `<ul class="td-list">${items.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
+    });
+
+    html += `<button class="task-detail-close" onclick="closeTaskDetail()">Close</button>`;
+    box.innerHTML = html;
+    document.getElementById('taskDetailOverlay').classList.add('visible');
+}
+
+function closeTaskDetail() {
+    document.getElementById('taskDetailOverlay').classList.remove('visible');
+}
+
+// ═══════════════════════════════════════════════════════════
 // SORT & SHOW HIDDEN
 // ═══════════════════════════════════════════════════════════
-function toggleSort() {
-    const modes = ['default', 'room', 'deadline'];
-    const labels = ['Sort', 'By Room', 'By Deadline'];
-    const idx = (modes.indexOf(sortMode) + 1) % modes.length;
-    sortMode = modes[idx];
-    const btn = document.getElementById('btnSort');
-    btn.querySelector('svg').nextSibling.textContent = ' ' + labels[idx];
-    btn.classList.toggle('active', sortMode !== 'default');
+function cycleView() {
+    const modes = ['default', 'rooms', 'task', 'resources'];
+    const labels = ['View', 'Rooms', 'Tasks', 'Resources'];
+    const icons = {
+        default:   '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>',
+        rooms:     '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/>',
+        task:      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>',
+        resources: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>'
+    };
+    const idx = (modes.indexOf(viewMode) + 1) % modes.length;
+    viewMode = modes[idx];
+    document.getElementById('viewLabel').textContent = labels[idx];
+    document.getElementById('viewIcon').innerHTML = icons[viewMode];
+    document.getElementById('btnView').classList.toggle('active', viewMode !== 'default');
     renderList();
 }
 
+function getOpenState() {
+    const openCards = new Set();
+    const openSubs = new Set();
+    document.querySelectorAll('.task-card.open').forEach(c => {
+        const id = c.id || c.getAttribute('data-view-card');
+        if (id) openCards.add(id);
+    });
+    document.querySelectorAll('.subgroup.open').forEach(sg => {
+        const card = sg.closest('.task-card');
+        const cardId = card ? (card.id || card.getAttribute('data-view-card')) : '';
+        const sgName = sg.getAttribute('data-sg-name') || '';
+        openSubs.add(cardId + '::' + sgName);
+    });
+    return { openCards, openSubs };
+}
+
+function restoreOpenState({ openCards, openSubs }) {
+    openCards.forEach(id => {
+        const el = document.getElementById(id) || document.querySelector(`[data-view-card="${id}"]`);
+        if (el) el.classList.add('open');
+    });
+    openSubs.forEach(key => {
+        const [cardId, sgName] = key.split('::');
+        const card = document.getElementById(cardId) || document.querySelector(`[data-view-card="${cardId}"]`);
+        if (card) {
+            const sg = card.querySelector(`.subgroup[data-sg-name="${sgName}"]`);
+            if (sg) sg.classList.add('open');
+        }
+    });
+}
+
 function toggleShowHidden() {
+    const state = getOpenState();
     showHidden = !showHidden;
     document.getElementById('btnShowHidden').classList.toggle('active', showHidden);
-    document.getElementById('btnShowHiddenLabel').textContent = showHidden ? 'Hide Done' : 'Show Hidden';
+    document.getElementById('btnShowHiddenLabel').textContent = showHidden ? 'Show' : 'Hide';
     renderList();
+    restoreOpenState(state);
+}
+
+let allCollapsed = false;
+function toggleCollapseAll() {
+    allCollapsed = !allCollapsed;
+    const btn = document.getElementById('btnCollapse');
+    btn.classList.toggle('active', allCollapsed);
+    document.getElementById('collapseLabel').textContent = allCollapsed ? 'Expand' : 'Collapse';
+    // Update icon: chevron-up when collapsed (ready to expand), chevron-down when expanded (ready to collapse)
+    document.getElementById('collapseIcon').innerHTML = allCollapsed
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>';
+    if (allCollapsed) {
+        document.querySelectorAll('.task-card.open').forEach(c => c.classList.remove('open'));
+        document.querySelectorAll('.subgroup.open').forEach(s => s.classList.remove('open'));
+    } else {
+        document.querySelectorAll('.task-card').forEach(c => c.classList.add('open'));
+        document.querySelectorAll('.subgroup').forEach(s => s.classList.add('open'));
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -627,29 +862,27 @@ function renderSummary() {
 // RENDER TASK LIST
 // ═══════════════════════════════════════════════════════════
 function renderList() {
+    if (viewMode === 'rooms') return renderRoomsView();
+    if (viewMode === 'task') return renderTaskView();
+    if (viewMode === 'resources') return renderResourcesView();
+    renderDefaultView();
+}
+
+function renderDefaultView() {
     const list = document.getElementById('taskList');
     const empty = document.getElementById('emptyState');
     list.innerHTML = '';
 
-    // Sort assignments
-    let sorted = [...assignments];
-    if (sortMode === 'room') {
-        sorted.sort((a, b) => (a.room_name || '').localeCompare(b.room_name || ''));
-    } else if (sortMode === 'deadline') {
-        sorted.sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
-    }
-
-    // Check if anything is visible (not all completed when hiding)
+    // Sort: groups of groups first, then groups, then individual tasks
+    const hierOrder = { group_of_groups: 0, group: 1, task: 2 };
+    let sorted = [...assignments].sort((a, b) => {
+        const ha = hierOrder[a.hierarchy_type] ?? 1;
+        const hb = hierOrder[b.hierarchy_type] ?? 1;
+        return ha - hb;
+    });
     const hasVisible = sorted.some(a => showHidden || a.status !== 'completed');
     if (!sorted.length || !hasVisible) {
-        empty.style.display = '';
-        if (sorted.length && !hasVisible) {
-            empty.querySelector('p').textContent = 'All tasks completed!';
-            empty.querySelector('small').textContent = 'Tap "Show Hidden" to review.';
-        } else {
-            empty.querySelector('p').textContent = 'No tasks for this day';
-            empty.querySelector('small').textContent = 'Select a different date or check with your supervisor.';
-        }
+        showEmptyState(sorted.length > 0 && !hasVisible);
         return;
     }
     empty.style.display = 'none';
@@ -658,60 +891,11 @@ function renderList() {
         const checklist = a.checklist || [];
         const doneCount = checklist.filter(c => c.completed == 1).length;
         const isComplete = doneCount === checklist.length && checklist.length > 0;
-
-        // Hide completed cards unless showHidden is on
         if (isComplete && !showHidden) return;
 
-        const deadlineHtml = a.deadline ? fmtDeadline(a.deadline) : '';
-
-        // Group by sub_group_name
-        const subGroups = {};
-        const ungrouped = [];
-        checklist.forEach(c => {
-            if (c.sub_group_name) {
-                if (!subGroups[c.sub_group_name]) subGroups[c.sub_group_name] = [];
-                subGroups[c.sub_group_name].push(c);
-            } else {
-                ungrouped.push(c);
-            }
-        });
-
-        let bodyHtml = '';
-        const sgNames = Object.keys(subGroups);
-
-        if (sgNames.length > 0) {
-            sgNames.forEach(sgName => {
-                const items = subGroups[sgName];
-                const sgDone = items.filter(c => c.completed == 1).length;
-                const sgAllDone = sgDone === items.length;
-
-                // Hide completed subgroups unless showHidden
-                const sgHidden = sgAllDone && !showHidden ? ' style="display:none;"' : '';
-
-                // Filter check items: hide done unless showHidden
-                const visibleItems = showHidden ? items : items.filter(c => c.completed != 1);
-                const itemsHtml = (showHidden ? items : visibleItems).map(c => renderCheckItem(a.id, c, !showHidden && c.completed == 1)).join('');
-
-                bodyHtml += `
-                    <div class="subgroup${sgAllDone ? ' all-done' : ''}" data-sg-name="${esc(sgName)}"${sgHidden}>
-                        <div class="subgroup-hdr" onclick="toggleSubGroup(this.parentElement)">
-                            <svg class="expand-icon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                            </svg>
-                            <span style="flex:1;">${esc(sgName)}</span>
-                            <span style="font-size:11px;color:${sgAllDone ? '#22c55e' : '#9ca3af'};font-weight:600;">${sgDone}/${items.length}</span>
-                        </div>
-                        <div class="subgroup-body">${itemsHtml}</div>
-                    </div>`;
-            });
-        }
-
-        // Ungrouped
-        const flatItems = ungrouped.length > 0 ? ungrouped : (sgNames.length === 0 ? checklist : []);
-        flatItems.forEach(c => {
-            if (!showHidden && c.completed == 1) return;
-            bodyHtml += renderCheckItem(a.id, c, false);
-        });
+        const deadlineHtml = (SCHED_MODE !== 'none' && a.deadline) ? fmtDeadline(a.deadline) : '';
+        const timeHtml = SCHED_MODE !== 'none' ? `<div class="time-badge">${a.estimated_minutes} min</div>` : '';
+        let bodyHtml = buildSubGroupBody(a.id, checklist);
 
         if (!checklist.length) {
             bodyHtml = '<div style="font-size:13px;color:#9ca3af;padding:12px 0;">No checklist items</div>';
@@ -732,7 +916,7 @@ function renderList() {
                 </div>
                 <div style="text-align:right;">
                     <div class="type-badge">${esc(a.type_name)}</div>
-                    <div class="time-badge">${a.estimated_minutes} min</div>
+                    ${timeHtml}
                     <div class="done-count">${doneCount}/${checklist.length}</div>
                 </div>
             </div>
@@ -742,13 +926,273 @@ function renderList() {
     });
 }
 
+// ── Rooms view: group all tasks by room ──
+function renderRoomsView() {
+    const list = document.getElementById('taskList');
+    const empty = document.getElementById('emptyState');
+    list.innerHTML = '';
+
+    // Build room → [{assignmentId, task_name, task_id, completed}]
+    const rooms = {};
+    assignments.forEach(a => {
+        const key = a.room_name + ' · ' + a.building_name;
+        if (!rooms[key]) rooms[key] = { room_name: a.room_name, building_name: a.building_name, items: [] };
+        (a.checklist || []).forEach(c => {
+            rooms[key].items.push({ ...c, assignment_id: a.id, group_name: a.group_name });
+        });
+    });
+
+    const roomKeys = Object.keys(rooms).sort();
+    const hasVisible = roomKeys.some(k => {
+        const items = rooms[k].items;
+        return showHidden || items.some(c => c.completed != 1);
+    });
+    if (!roomKeys.length || !hasVisible) {
+        showEmptyState(roomKeys.length > 0 && !hasVisible);
+        return;
+    }
+    empty.style.display = 'none';
+
+    roomKeys.forEach(key => {
+        const room = rooms[key];
+        const items = room.items;
+        const doneCount = items.filter(c => c.completed == 1).length;
+        const isComplete = doneCount === items.length && items.length > 0;
+        if (isComplete && !showHidden) return;
+
+        const cardId = 'room-' + esc(key).replace(/[^a-zA-Z0-9]/g, '_');
+        let bodyHtml = '';
+        items.forEach(c => {
+            if (!showHidden && c.completed == 1) return;
+            bodyHtml += renderCheckItem(c.assignment_id, c, false);
+        });
+
+        const card = document.createElement('div');
+        card.className = 'task-card' + (isComplete ? ' completed' : '');
+        card.id = cardId;
+        card.setAttribute('data-view-card', key);
+        card.innerHTML = `
+            <div class="task-card-hdr" onclick="this.parentElement.classList.toggle('open')">
+                <svg class="expand-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+                <div style="flex:1;min-width:0;">
+                    <div class="group-title">${esc(room.room_name)}</div>
+                    <div class="room-label">${esc(room.building_name)}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="done-count">${doneCount}/${items.length}</div>
+                </div>
+            </div>
+            <div class="task-card-body">${bodyHtml}</div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+// ── Task view: group same tasks across rooms ──
+function renderTaskView() {
+    const list = document.getElementById('taskList');
+    const empty = document.getElementById('emptyState');
+    list.innerHTML = '';
+
+    // Build taskName → [{assignment_id, room_name, building_name, task_id, completed}]
+    const taskMap = {};
+    assignments.forEach(a => {
+        (a.checklist || []).forEach(c => {
+            const tName = c.task_name;
+            if (!taskMap[tName]) taskMap[tName] = [];
+            taskMap[tName].push({ ...c, assignment_id: a.id, room_name: a.room_name, building_name: a.building_name });
+        });
+    });
+
+    const taskNames = Object.keys(taskMap).sort();
+    const hasVisible = taskNames.some(t => {
+        const items = taskMap[t];
+        return showHidden || items.some(c => c.completed != 1);
+    });
+    if (!taskNames.length || !hasVisible) {
+        showEmptyState(taskNames.length > 0 && !hasVisible);
+        return;
+    }
+    empty.style.display = 'none';
+
+    taskNames.forEach(tName => {
+        const items = taskMap[tName];
+        const doneCount = items.filter(c => c.completed == 1).length;
+        const isComplete = doneCount === items.length && items.length > 0;
+        if (isComplete && !showHidden) return;
+
+        const cardId = 'task-' + esc(tName).replace(/[^a-zA-Z0-9]/g, '_');
+        let bodyHtml = '';
+        items.forEach(c => {
+            if (!showHidden && c.completed == 1) return;
+            taskDetailCache[c.task_id] = c;
+            // Show room name as the label instead of task name
+            bodyHtml += `
+                <div class="check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}" data-assignment-id="${c.assignment_id}">
+                    <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
+                           onchange="toggleCheck(${c.assignment_id}, ${c.task_id}, this.checked)">
+                    <span class="check-label" onclick="openTaskDetail(${c.task_id})">${esc(c.room_name)} · ${esc(c.building_name)}</span>
+                </div>`;
+        });
+
+        const card = document.createElement('div');
+        card.className = 'task-card' + (isComplete ? ' completed' : '');
+        card.id = cardId;
+        card.setAttribute('data-view-card', tName);
+        card.innerHTML = `
+            <div class="task-card-hdr" onclick="this.parentElement.classList.toggle('open')">
+                <svg class="expand-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+                <div style="flex:1;min-width:0;">
+                    <div class="group-title">${esc(tName)}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="done-count">${doneCount}/${items.length}</div>
+                </div>
+            </div>
+            <div class="task-card-body">${bodyHtml}</div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+// ── Resources view: deduplicated list of needed supplies, tools, materials, equipment ──
+function renderResourcesView() {
+    const list = document.getElementById('taskList');
+    const empty = document.getElementById('emptyState');
+    list.innerHTML = '';
+
+    // Collect unique resources from all assignments' checklists
+    const sets = { supplies: new Set(), tools: new Set(), materials: new Set(), equipment: new Set() };
+    assignments.forEach(a => {
+        (a.checklist || []).forEach(c => {
+            const r = c.resources;
+            if (!r) return;
+            (r.supplies || []).forEach(n => sets.supplies.add(n));
+            (r.tools || []).forEach(n => sets.tools.add(n));
+            (r.materials || []).forEach(n => sets.materials.add(n));
+            (r.equipment || []).forEach(n => sets.equipment.add(n));
+        });
+    });
+
+    const categories = [
+        { key: 'supplies',  label: 'Supplies',  icon: '🧴' },
+        { key: 'tools',     label: 'Tools',      icon: '🔧' },
+        { key: 'materials', label: 'Materials',  icon: '📦' },
+        { key: 'equipment', label: 'Equipment',  icon: '⚙️' },
+    ];
+
+    const totalItems = categories.reduce((sum, cat) => sum + sets[cat.key].size, 0);
+    if (!totalItems) {
+        empty.style.display = '';
+        empty.querySelector('p').textContent = 'No resources needed';
+        empty.querySelector('small').textContent = 'No supplies, tools, materials, or equipment linked to today\'s tasks.';
+        return;
+    }
+    empty.style.display = 'none';
+
+    categories.forEach(cat => {
+        const items = [...sets[cat.key]].sort();
+        if (!items.length) return;
+
+        const card = document.createElement('div');
+        card.className = 'task-card open'; // start expanded
+        card.innerHTML = `
+            <div class="task-card-hdr" onclick="this.parentElement.classList.toggle('open')">
+                <svg class="expand-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+                <div style="flex:1;min-width:0;">
+                    <div class="group-title">${cat.icon} ${cat.label}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="done-count">${items.length} item${items.length !== 1 ? 's' : ''}</div>
+                </div>
+            </div>
+            <div class="task-card-body">
+                ${items.map(name => `
+                    <div class="resource-item" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+                        <span style="font-size:14px;color:#374151;">${esc(name)}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+// ── Shared helpers ──
+function showEmptyState(allDone) {
+    const empty = document.getElementById('emptyState');
+    empty.style.display = '';
+    if (allDone) {
+        empty.querySelector('p').textContent = 'All tasks completed!';
+        empty.querySelector('small').textContent = 'Tap "Show Hidden" to review.';
+    } else {
+        empty.querySelector('p').textContent = 'No tasks for this day';
+        empty.querySelector('small').textContent = 'Select a different date or check with your supervisor.';
+    }
+}
+
+function buildSubGroupBody(assignmentId, checklist) {
+    const subGroups = {};
+    const ungrouped = [];
+    checklist.forEach(c => {
+        if (c.sub_group_name) {
+            if (!subGroups[c.sub_group_name]) subGroups[c.sub_group_name] = [];
+            subGroups[c.sub_group_name].push(c);
+        } else {
+            ungrouped.push(c);
+        }
+    });
+
+    let bodyHtml = '';
+    const sgNames = Object.keys(subGroups);
+
+    if (sgNames.length > 0) {
+        sgNames.forEach(sgName => {
+            const items = subGroups[sgName];
+            const sgDone = items.filter(c => c.completed == 1).length;
+            const sgAllDone = sgDone === items.length;
+            const sgHidden = sgAllDone && !showHidden ? ' style="display:none;"' : '';
+            const visibleItems = showHidden ? items : items.filter(c => c.completed != 1);
+            const itemsHtml = (showHidden ? items : visibleItems).map(c => renderCheckItem(assignmentId, c, !showHidden && c.completed == 1)).join('');
+
+            bodyHtml += `
+                <div class="subgroup${sgAllDone ? ' all-done' : ''}" data-sg-name="${esc(sgName)}"${sgHidden}>
+                    <div class="subgroup-hdr" onclick="toggleSubGroup(this.parentElement)">
+                        <svg class="expand-icon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                        <span style="flex:1;">${esc(sgName)}</span>
+                        <span style="font-size:11px;color:${sgAllDone ? '#22c55e' : '#9ca3af'};font-weight:600;">${sgDone}/${items.length}</span>
+                    </div>
+                    <div class="subgroup-body">${itemsHtml}</div>
+                </div>`;
+        });
+    }
+
+    const flatItems = ungrouped.length > 0 ? ungrouped : (sgNames.length === 0 ? checklist : []);
+    flatItems.forEach(c => {
+        if (!showHidden && c.completed == 1) return;
+        bodyHtml += renderCheckItem(assignmentId, c, false);
+    });
+
+    return bodyHtml;
+}
+
 function renderCheckItem(assignmentId, c, hidden) {
     const hideStyle = hidden ? ' style="display:none;"' : '';
+    // Store task detail for popup
+    taskDetailCache[c.task_id] = c;
     return `
-        <div class="check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}"${hideStyle}>
+        <div class="check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}" data-assignment-id="${assignmentId}"${hideStyle}>
             <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
                    onchange="toggleCheck(${assignmentId}, ${c.task_id}, this.checked)">
-            <span class="check-label">${esc(c.task_name)}</span>
+            <span class="check-label" onclick="openTaskDetail(${c.task_id})">${esc(c.task_name)}</span>
         </div>`;
 }
 
@@ -784,9 +1228,17 @@ function toggleSubGroup(el) {
 }
 
 function toggleCheck(assignmentId, taskId, checked) {
-    // Optimistic UI update
-    const card = document.getElementById('assignment-' + assignmentId);
-    const item = card ? card.querySelector(`.check-item[data-task-id="${taskId}"]`) : null;
+    // Optimistic UI update — find the item (may be in default, rooms, or task view card)
+    let card, item;
+    if (viewMode === 'default') {
+        card = document.getElementById('assignment-' + assignmentId);
+        item = card ? card.querySelector(`.check-item[data-task-id="${taskId}"]`) : null;
+    } else {
+        // In rooms/task views, find the item by both assignment-id and task-id
+        item = document.querySelector(`.check-item[data-task-id="${taskId}"][data-assignment-id="${assignmentId}"]`)
+            || document.querySelector(`.check-item[data-task-id="${taskId}"]`);
+        card = item ? item.closest('.task-card') : null;
+    }
     if (item) {
         item.querySelector('input[type=checkbox]').checked = checked;
         item.classList.toggle('done', checked);
@@ -854,10 +1306,26 @@ function toggleCheck(assignmentId, taskId, checked) {
         }
     }
 
-    // If unchecking, re-render to show items properly
+    // If unchecking, re-render but preserve open state
     if (!checked) {
-        setTimeout(() => renderList(), 100);
+        setTimeout(() => {
+            const state = getOpenState();
+            renderList();
+            restoreOpenState(state);
+        }, 100);
     }
+
+    // Update in-memory assignments array (so view switches reflect correct state)
+    assignments.forEach(a => {
+        if (a.id === assignmentId && a.checklist) {
+            a.checklist.forEach(c => {
+                if (c.task_id === taskId) c.completed = checked ? 1 : 0;
+            });
+            const doneAll = a.checklist.every(c => c.completed == 1);
+            if (doneAll) a.status = 'completed';
+            else a.status = a.checklist.some(c => c.completed == 1) ? 'in_progress' : 'pending';
+        }
+    });
 
     // Also update local cache
     updateLocalCache(assignmentId, taskId, checked);
@@ -879,11 +1347,17 @@ function toggleCheck(assignmentId, taskId, checked) {
         fetch(payload.url, { method: 'POST', body: fd })
             .then(r => r.json())
             .then(r => {
-                if (r.assignment_status === 'completed' && card) {
-                    card.classList.add('completed');
-                } else if (card) {
-                    card.classList.remove('completed');
+                // Only mark completed in default view (rooms/task views don't use assignment cards)
+                if (viewMode === 'default' && card) {
+                    if (r.assignment_status === 'completed') {
+                        // Delay so hide animation finishes first
+                        setTimeout(() => card.classList.add('completed'), 500);
+                    } else {
+                        card.classList.remove('completed');
+                    }
                 }
+                // Refresh date chip colors
+                fetchDateStatuses(selectedDate, selectedDate);
             })
             .catch(() => queueOfflineAction(payload));
     } else {

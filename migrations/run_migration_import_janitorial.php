@@ -402,10 +402,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes'
     }
     $results[] = ['step' => 'Add supply detail columns', 'status' => 'ok', 'detail' => '10 columns added/verified'];
 
-    // Step 2: Clear all existing data
+    // Step 2: Clear catalog/resource data ONLY (preserve schedules and assignments)
     $clear_tables = [
-        'janitor_task_checklist','janitor_task_assignments',
-        'cleaning_schedule_tasks','cleaning_schedule_task_groups','cleaning_schedule_rooms','cleaning_schedules',
+        // DO NOT clear: cleaning_schedules, cleaning_schedule_rooms, cleaning_schedule_tasks,
+        //               cleaning_schedule_task_groups, janitor_task_assignments, janitor_task_checklist
         'task_tools','task_supplies','task_materials','task_equipment',
         'task_preferred_workers','task_rooms','task_group_preferred_workers','room_default_task_groups',
         'task_group_tasks','task_groups','tasks','task_types',
@@ -543,7 +543,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes'
     </div>
 
     <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-        <p class="text-red-700 font-bold text-sm">&#9888; This will clear ALL existing task, supply, tool, equipment, and schedule data first!</p>
+        <p class="text-amber-700 font-bold text-sm">&#9888; This will clear existing task catalog, supply, and tool data (schedules and assignments are preserved).</p>
     </div>
 
     <form method="POST">

@@ -68,11 +68,13 @@ $db = getDB();
                 <div>
                     <label class="block text-sm font-semibold text-gray-700">Scheduling Mode</label>
                     <p class="text-xs text-gray-400 mt-0.5">
+                        <strong>None:</strong> no time constraints shown.
                         <strong>Deadline:</strong> tasks must be completed by a deadline time.
                         <strong>Time Slot:</strong> tasks are assigned to specific time windows.
                     </p>
                 </div>
                 <select id="set-sched-mode" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="none">None</option>
                     <option value="deadline">Deadline</option>
                     <option value="timeslot">Time Slot</option>
                 </select>
@@ -86,6 +88,32 @@ $db = getDB();
                 </div>
                 <input id="set-default-deadline" type="time" value="08:00"
                        class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            </div>
+
+            <!-- PWA Date Strip: Days Back -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">PWA Date Strip — Days Back</label>
+                    <p class="text-xs text-gray-400 mt-0.5">How many past days to show in the mobile app date scroller.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input id="set-date-strip-back" type="number" min="0" max="90" value="3"
+                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-20 text-center">
+                    <span class="text-sm text-gray-500">days</span>
+                </div>
+            </div>
+
+            <!-- PWA Date Strip: Days Forward -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">PWA Date Strip — Days Forward</label>
+                    <p class="text-xs text-gray-400 mt-0.5">How many future days to show in the mobile app date scroller.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input id="set-date-strip-forward" type="number" min="1" max="90" value="10"
+                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-20 text-center">
+                    <span class="text-sm text-gray-500">days</span>
+                </div>
             </div>
 
             <div class="flex justify-end pt-2">
@@ -217,6 +245,8 @@ async function loadSettings() {
     if (s.scheduling_mode) document.getElementById('set-sched-mode').value = s.scheduling_mode;
     if (s.default_deadline_time) document.getElementById('set-default-deadline').value = s.default_deadline_time;
     document.getElementById('set-auto-generate').checked = s.auto_generate_assignments === '1';
+    if (s.pwa_date_strip_back) document.getElementById('set-date-strip-back').value = s.pwa_date_strip_back;
+    if (s.pwa_date_strip_forward) document.getElementById('set-date-strip-forward').value = s.pwa_date_strip_forward;
 }
 
 async function saveSchedulingSettings() {
@@ -225,6 +255,8 @@ async function saveSchedulingSettings() {
         scheduling_mode: document.getElementById('set-sched-mode').value,
         default_deadline_time: document.getElementById('set-default-deadline').value,
         auto_generate_assignments: document.getElementById('set-auto-generate').checked ? '1' : '0',
+        pwa_date_strip_back: document.getElementById('set-date-strip-back').value,
+        pwa_date_strip_forward: document.getElementById('set-date-strip-forward').value,
     };
     const r = await fetch(BASE_PATH + '/api/settings_api.php', {
         method: 'POST',

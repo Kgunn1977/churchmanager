@@ -588,7 +588,12 @@ switch ($action) {
                    COALESCE(tt.name, tt2.name, '') AS type_name,
                    rm.name AS room_name,
                    fl.name AS floor_name,
-                   b.name  AS building_name
+                   b.name  AS building_name,
+                   CASE
+                       WHEN ja.task_group_id IS NULL THEN 'task'
+                       WHEN (SELECT COUNT(*) FROM task_groups tg_child WHERE tg_child.parent_id = tg.id) > 0 THEN 'group_of_groups'
+                       ELSE 'group'
+                   END AS hierarchy_type
             FROM janitor_task_assignments ja
             LEFT JOIN task_groups tg ON tg.id = ja.task_group_id
             LEFT JOIN task_types tt  ON tt.id = tg.task_type_id
@@ -605,7 +610,9 @@ switch ($action) {
 
         // Load checklist for each, with sub-group name for nested groups
         $stChecklist = $db->prepare("
-            SELECT jtc.task_id, t.name AS task_name, jtc.completed, jtc.completed_at,
+            SELECT jtc.task_id, t.name AS task_name, t.description AS task_description,
+                   t.estimated_minutes AS task_minutes,
+                   jtc.completed, jtc.completed_at,
                    tgt_sub.task_group_id AS sub_group_id
             FROM janitor_task_checklist jtc
             JOIN tasks t ON t.id = jtc.task_id
@@ -614,6 +621,13 @@ switch ($action) {
             ORDER BY tgt_sub.task_group_id, tgt_sub.sort_order, t.name
         ");
         $stSubGroupName = $db->prepare("SELECT name FROM task_groups WHERE id = ?");
+
+        // Resource lookups per task
+        $stResSupplies  = $db->prepare("SELECT s.name FROM task_supplies ts JOIN supplies s ON s.id = ts.supply_id WHERE ts.task_id = ?");
+        $stResTools     = $db->prepare("SELECT t.name FROM task_tools tt JOIN tools t ON t.id = tt.tool_id WHERE tt.task_id = ?");
+        $stResMaterials = $db->prepare("SELECT m.name FROM task_materials tm JOIN materials m ON m.id = tm.material_id WHERE tm.task_id = ?");
+        $stResEquipment = $db->prepare("SELECT e.name FROM task_equipment te JOIN equipment e ON e.id = te.equipment_id WHERE te.task_id = ?");
+        $resCache = []; // cache by task_id
 
         foreach ($assignments as &$a) {
             $stChecklist->execute([$a['id']]);
@@ -635,6 +649,22 @@ switch ($action) {
                     $item['sub_group_name'] = $sgNameCache[$sgId];
                 }
                 unset($item['sub_group_id']); // don't leak internal id
+
+                // Attach resources (cached per task_id)
+                $tid = $item['task_id'];
+                if (!isset($resCache[$tid])) {
+                    $stResSupplies->execute([$tid]);
+                    $stResTools->execute([$tid]);
+                    $stResMaterials->execute([$tid]);
+                    $stResEquipment->execute([$tid]);
+                    $resCache[$tid] = [
+                        'supplies'  => array_column($stResSupplies->fetchAll(), 'name'),
+                        'tools'     => array_column($stResTools->fetchAll(), 'name'),
+                        'materials' => array_column($stResMaterials->fetchAll(), 'name'),
+                        'equipment' => array_column($stResEquipment->fetchAll(), 'name'),
+                    ];
+                }
+                $item['resources'] = $resCache[$tid];
             }
             $a['checklist'] = $items;
         }
@@ -943,6 +973,44 @@ switch ($action) {
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
         echo json_encode($rows);
+        break;
+
+    case 'get_date_statuses':
+        // Returns task completion status for a range of dates for a user
+        $startDate = $_GET['start'] ?? date('Y-m-d');
+        $endDate   = $_GET['end']   ?? date('Y-m-d');
+        $userId    = (int)($_GET['user_id'] ?? 0);
+
+        $sql = "
+            SELECT ja.assigned_date,
+                   COUNT(jtc.task_id) AS total,
+                   SUM(jtc.completed) AS done
+            FROM janitor_task_assignments ja
+            JOIN janitor_task_checklist jtc ON jtc.assignment_id = ja.id
+            WHERE ja.assigned_date BETWEEN ? AND ?
+        ";
+        $params = [$startDate, $endDate];
+        if ($userId) { $sql .= " AND ja.assigned_to = ?"; $params[] = $userId; }
+        $sql .= " GROUP BY ja.assigned_date";
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+
+        // Build date => status map
+        $result = [];
+        foreach ($rows as $r) {
+            $total = (int)$r['total'];
+            $done  = (int)$r['done'];
+            if ($total === 0) {
+                $result[$r['assigned_date']] = 'none';
+            } elseif ($done >= $total) {
+                $result[$r['assigned_date']] = 'complete';
+            } else {
+                $result[$r['assigned_date']] = 'incomplete';
+            }
+        }
+        echo json_encode($result);
         break;
 
     default:
