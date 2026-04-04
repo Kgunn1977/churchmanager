@@ -29,33 +29,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $messageType = 'success';
 
         if ($user) {
-            // Generate secure token
-            $token = bin2hex(random_bytes(32));
-            $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+            try {
+                // Check if reset_token column exists (migration may not have run)
+                $colCheck = $db->query("SHOW COLUMNS FROM users LIKE 'reset_token'")->fetch();
+                if (!$colCheck) {
+                    // Auto-create the columns if missing
+                    $db->exec("ALTER TABLE users ADD COLUMN reset_token VARCHAR(64) NULL DEFAULT NULL AFTER password");
+                    $db->exec("ALTER TABLE users ADD COLUMN reset_token_expires DATETIME NULL DEFAULT NULL AFTER reset_token");
+                }
 
-            $db->prepare("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?")
-               ->execute([$token, $expires, $user['id']]);
+                // Generate secure token
+                $token = bin2hex(random_bytes(32));
+                $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour
 
-            // Build reset URL
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $host = $_SERVER['HTTP_HOST'];
-            $resetUrl = $protocol . '://' . $host . url('/reset_password.php') . '?token=' . $token;
+                $db->prepare("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?")
+                   ->execute([$token, $expires, $user['id']]);
 
-            // Send email
-            $to = $user['email'];
-            $subject = 'Password Reset — Church Facility Manager';
-            $body = "Hi {$user['name']},\r\n\r\n";
-            $body .= "You requested a password reset. Click the link below to set a new password:\r\n\r\n";
-            $body .= $resetUrl . "\r\n\r\n";
-            $body .= "This link expires in 1 hour.\r\n\r\n";
-            $body .= "If you didn't request this, you can safely ignore this email.\r\n\r\n";
-            $body .= "— Church Facility Manager";
+                // Build reset URL
+                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                $host = $_SERVER['HTTP_HOST'];
+                $resetUrl = $protocol . '://' . $host . url('/reset_password.php') . '?token=' . $token;
 
-            $headers = "From: Church Facility Manager <noreply@kg-fire.com>\r\n";
-            $headers .= "Reply-To: noreply@kg-fire.com\r\n";
-            $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+                // Send email
+                $to = $user['email'];
+                $subject = 'Password Reset - Church Facility Manager';
+                $body = "Hi {$user['name']},\r\n\r\n";
+                $body .= "You requested a password reset. Click the link below to set a new password:\r\n\r\n";
+                $body .= $resetUrl . "\r\n\r\n";
+                $body .= "This link expires in 1 hour.\r\n\r\n";
+                $body .= "If you didn't request this, you can safely ignore this email.\r\n\r\n";
+                $body .= "- Church Facility Manager";
 
-            @mail($to, $subject, $body, $headers);
+                $headers  = "From: noreply@kg-fire.com\r\n";
+                $headers .= "Reply-To: noreply@kg-fire.com\r\n";
+                $headers .= "MIME-Version: 1.0\r\n";
+                $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+                $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+
+                mail($to, $subject, $body, $headers);
+            } catch (Exception $e) {
+                // Silently fail — don't reveal whether the email exists
+            }
         }
     }
 }
