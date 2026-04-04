@@ -6,6 +6,10 @@ require_once __DIR__ . '/../config/database.php';
 $db        = getDB();
 $buildings = $db->query("SELECT id, name FROM buildings ORDER BY name")->fetchAll();
 
+// Check if auto-generate is enabled
+$_autoGen = $db->query("SELECT setting_value FROM settings WHERE setting_key = 'auto_generate_assignments'")->fetch();
+$autoGenerateOn = ($_autoGen && $_autoGen['setting_value'] === '1');
+
 // Floor plan picker config
 $fp_id        = 'sched';
 $fp_div_key   = 'fp_w_sched';
@@ -120,10 +124,12 @@ html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
                 <span id="room-count-badge" class="text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full hidden">0 rooms</span>
             </div>
             <div class="flex items-center gap-2">
+                <?php if (!$autoGenerateOn): ?>
                 <button onclick="generateAssignments()" class="border border-gray-300 hover:bg-gray-50 text-gray-600 rounded-lg px-3 py-1.5 text-sm transition flex items-center gap-1">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                     Generate Assignments
                 </button>
+                <?php endif; ?>
                 <button id="new-sched-btn" onclick="tryOpenScheduleModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-3 py-1.5 text-sm transition flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600" disabled>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     New Schedule

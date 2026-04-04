@@ -38,6 +38,18 @@ $db = getDB();
         <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Scheduling</h2>
 
         <div class="space-y-5">
+            <!-- Auto-Generate Toggle -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Auto-Generate Assignments</label>
+                    <p class="text-xs text-gray-400 mt-0.5">Automatically create task assignments on every page load. Missing assignments are filled in up to the generation window.</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input id="set-auto-generate" type="checkbox" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+
             <!-- Generation Window -->
             <div class="flex items-center justify-between">
                 <div>
@@ -45,7 +57,7 @@ $db = getDB();
                     <p class="text-xs text-gray-400 mt-0.5">How many days ahead to generate task assignments from schedules.</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <input id="set-gen-days" type="number" min="1" max="90" value="14"
+                    <input id="set-gen-days" type="number" min="1" max="365" value="14"
                            class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-20 text-center">
                     <span class="text-sm text-gray-500">days</span>
                 </div>
@@ -204,6 +216,7 @@ async function loadSettings() {
     if (s.schedule_generation_days) document.getElementById('set-gen-days').value = s.schedule_generation_days;
     if (s.scheduling_mode) document.getElementById('set-sched-mode').value = s.scheduling_mode;
     if (s.default_deadline_time) document.getElementById('set-default-deadline').value = s.default_deadline_time;
+    document.getElementById('set-auto-generate').checked = s.auto_generate_assignments === '1';
 }
 
 async function saveSchedulingSettings() {
@@ -211,6 +224,7 @@ async function saveSchedulingSettings() {
         schedule_generation_days: document.getElementById('set-gen-days').value,
         scheduling_mode: document.getElementById('set-sched-mode').value,
         default_deadline_time: document.getElementById('set-default-deadline').value,
+        auto_generate_assignments: document.getElementById('set-auto-generate').checked ? '1' : '0',
     };
     const r = await fetch(BASE_PATH + '/api/settings_api.php', {
         method: 'POST',

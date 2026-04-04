@@ -2,6 +2,9 @@
 require_once __DIR__ . '/auth.php';
 requireLogin();
 $currentUser = getCurrentUser();
+
+// Auto-generate task assignments on every page load (if enabled in Settings)
+require_once __DIR__ . '/auto_generate.php';
 $currentPage = basename($_SERVER['PHP_SELF']);
 ?>
 <!DOCTYPE html>
@@ -34,8 +37,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'reservations.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 Calendar
             </a>
-            <a href="<?= url('/pages/janitor.php') ?>"
-               class="px-3 py-1.5 rounded-lg transition <?= $currentPage === 'janitor.php' ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+            <a href="<?= url('/pages/pwa_preview.php') ?>"
+               class="px-3 py-1.5 rounded-lg transition <?= in_array($currentPage, ['pwa_preview.php','janitor.php']) ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                 PWA
             </a>
 
