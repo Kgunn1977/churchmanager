@@ -1,13 +1,13 @@
 // Extract BASE_PATH from query parameter passed during registration
 const BASE_PATH = new URL(self.location).searchParams.get('base') || '';
-const CACHE_NAME = 'cfm-tasks-v6';
+const CACHE_NAME = 'cfm-tasks-v7';
 const STATIC_ASSETS = [
     BASE_PATH + '/pwa/manifest.php',
     BASE_PATH + '/pwa/icons/icon-192.svg',
     BASE_PATH + '/pwa/icons/icon-512.svg'
 ];
 // Never cache these — auth-sensitive or dynamic pages
-const NO_CACHE = ['/login.php', '/logout.php', '/pwa/login.php', '/pwa/index.php', '/forgot_password.php', '/reset_password.php'];
+const NO_CACHE = ['/login.php', '/logout.php', '/pwa/login.php', '/pwa/index.php', '/pwa/logout_api.php', '/forgot_password.php', '/reset_password.php'];
 
 // ═══════════════════════════════════════════════════════════
 // INSTALL — cache static shell
