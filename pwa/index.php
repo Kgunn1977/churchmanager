@@ -194,13 +194,19 @@ html, body {
     height: 100vh; height: 100dvh;
 }
 
-/* ── Top bar ──────────────────────────────────────────────── */
+/* ── Top bar (fixed so it can never scroll out of view) ───── */
 .top-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
     color: #fff; padding: 12px 16px;
     padding-top: max(12px, env(safe-area-inset-top));
     display: flex; align-items: center; justify-content: space-between;
+}
+/* Spacer so content below isn't hidden behind the fixed top bar */
+.top-bar-spacer {
     flex-shrink: 0;
+    height: 48px; /* approximate bar height */
+    height: calc(max(12px, env(safe-area-inset-top)) + 40px);
 }
 .top-bar-title {
     font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
@@ -485,7 +491,7 @@ window.scrollTo(0, 0);
 </script>
 <div id="app">
 
-    <!-- Top bar -->
+    <!-- Top bar (position:fixed — always visible) -->
     <div class="top-bar">
         <div>
             <div class="top-bar-title">My Tasks</div>
@@ -496,6 +502,7 @@ window.scrollTo(0, 0);
             <button class="logout-btn" onclick="doLogout()">Sign Out</button>
         </div>
     </div>
+    <div class="top-bar-spacer"></div>
 
     <!-- Offline banner -->
     <div class="offline-banner" id="offlineBanner">You're offline — changes will sync when reconnected</div>
@@ -548,7 +555,7 @@ window.scrollTo(0, 0);
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <p>No tasks for this day <span style="color:#d1d5db;font-size:10px;">v9</span></p>
+            <p>No tasks for this day <span style="color:#d1d5db;font-size:10px;">v10</span></p>
             <small>Select a different date or check with your supervisor.</small>
         </div>
     </div>
@@ -1293,7 +1300,7 @@ function showEmptyState(allDone) {
         empty.querySelector('p').textContent = 'All tasks completed!';
         empty.querySelector('small').textContent = 'Tap "Show Hidden" to review.';
     } else {
-        empty.querySelector('p').innerHTML = 'No tasks for this day <span style="color:#d1d5db;font-size:10px;">v9</span>';
+        empty.querySelector('p').innerHTML = 'No tasks for this day <span style="color:#d1d5db;font-size:10px;">v10</span>';
         empty.querySelector('small').textContent = 'Select a different date or check with your supervisor.';
     }
 }
