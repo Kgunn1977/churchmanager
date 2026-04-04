@@ -1,11 +1,9 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../config/app.php';
-if (!isLoggedIn()) {
-    header('Location: ' . url('/pwa/login.php'));
-    exit;
-}
-$user = getCurrentUser();
+// Install page should be accessible without login — user needs it to add the PWA to home screen.
+// After installing, the app opens to index.php which will require login.
+$user = isLoggedIn() ? getCurrentUser() : null;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -148,7 +146,7 @@ h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
         ✓ App is already installed — open it from your home screen
     </div>
 
-    <a href="<?= url('/pwa/index.php') ?>" class="skip" onclick="document.cookie='cfm_pwa_seen=1;path=<?= url('/pwa/') ?>;max-age=31536000'">Continue in browser →</a>
+    <a href="<?= url($user ? '/pwa/index.php' : '/pwa/login.php') ?>" class="skip" onclick="document.cookie='cfm_pwa_seen=1;path=<?= url('/pwa/') ?>;max-age=31536000'">Continue in browser →</a>
 </div>
 
 <script>
@@ -166,10 +164,12 @@ const isStandalone = window.matchMedia('(display-mode: standalone)').matches
 
 let deferredPrompt = null;
 
+const isLoggedIn = <?= json_encode($user !== null) ?>;
+
 if (isStandalone) {
-    // Already running as installed PWA — redirect to app
+    // Already running as installed PWA — redirect to app (or login)
     document.getElementById('installedMsg').style.display = 'block';
-    setTimeout(() => { location.href = BASE_PATH + '/pwa/index.php'; }, 2000);
+    setTimeout(() => { location.href = BASE_PATH + (isLoggedIn ? '/pwa/index.php' : '/pwa/login.php'); }, 2000);
 } else if (isIOS) {
     // Show iOS manual instructions
     document.getElementById('iosInstructions').style.display = 'block';

@@ -3,22 +3,28 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/app.php';
 
-// Handle logout — clear session manually so we can redirect to PWA login
-if (isset($_GET['logout'])) {
-    session_unset();
-    session_destroy();
-    header('Location: ' . url('/pwa/login.php'));
-    exit;
-}
-
 // Prevent caching of login page
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Handle logout — clear session manually so we can redirect to PWA login
+if (isset($_GET['logout'])) {
+    session_unset();
+    session_destroy();
+    // Redirect to clean login URL (no ?logout param) via JS to avoid iOS PWA issues
+    echo '<!DOCTYPE html><html><head><meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate"></head>';
+    echo '<body style="background:#2563eb;"></body>';
+    echo '<script>window.location.replace(' . json_encode(url('/pwa/login.php')) . ');</script></html>';
+    exit;
+}
+
 // Already logged in — go to PWA home
 if (isLoggedIn()) {
-    header('Location: ' . url('/pwa/index.php') . '?_t=' . time());
+    $dest = url('/pwa/index.php') . '?_t=' . time();
+    echo '<!DOCTYPE html><html><head><meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate"></head>';
+    echo '<body style="background:#1e40af;"></body>';
+    echo '<script>window.location.replace(' . json_encode($dest) . ');</script></html>';
     exit;
 }
 
@@ -37,11 +43,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password'])) {
             loginUser($user);
-            // Send to install page if they haven't installed yet, otherwise straight to app
-            // Cache-bust query param forces fresh load after sign-in
+            // Use JS redirect instead of HTTP 302 — iOS standalone PWAs
+            // lose page state (top bar) after server redirect chains.
             $dest = url(isset($_COOKIE['cfm_pwa_seen']) ? '/pwa/index.php' : '/pwa/install.php');
             $dest .= (strpos($dest, '?') !== false ? '&' : '?') . '_t=' . time();
-            header('Location: ' . $dest);
+            echo '<!DOCTYPE html><html><head>';
+            echo '<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">';
+            echo '<meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">';
+            echo '</head><body style="background:#1e40af;"></body>';
+            echo '<script>window.location.replace(' . json_encode($dest) . ');</script>';
+            echo '</html>';
             exit;
         } else {
             $error = 'Incorrect email or password.';
