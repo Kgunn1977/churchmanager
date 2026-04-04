@@ -187,16 +187,41 @@ $db = getDB();
                 </button>
             </div>
 
-            <!-- DB Import -->
+            <!-- DB Import: Replace -->
             <div class="flex items-center justify-between">
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700">Sync Database from Snapshot</label>
-                    <p class="text-xs text-gray-400 mt-0.5">Replaces this database with the snapshot from <code class="bg-gray-100 px-1 rounded">data/db_snapshot.sql</code>. Git Pull first.</p>
+                    <label class="block text-sm font-semibold text-gray-700">Replace Database from Snapshot</label>
+                    <p class="text-xs text-gray-400 mt-0.5">Drops all tables and rebuilds from <code class="bg-gray-100 px-1 rounded">data/db_snapshot.sql</code>. Git Pull first.</p>
                 </div>
                 <button id="db-import-btn" onclick="dbImport()" class="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                    Sync DB
+                    Replace
                 </button>
+            </div>
+
+            <!-- DB Import: Merge -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Merge Database from Snapshot</label>
+                    <p class="text-xs text-gray-400 mt-0.5">Adds new records from the snapshot. Existing records are kept unchanged.</p>
+                </div>
+                <button id="db-merge-btn" onclick="dbMerge()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Merge
+                </button>
+            </div>
+
+            <hr class="border-gray-100">
+
+            <!-- DB Upload -->
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Upload SQL File</label>
+                <p class="text-xs text-gray-400 mb-3">Upload a <code class="bg-gray-100 px-1 rounded">.sql</code> snapshot directly instead of using Git Pull.</p>
+                <div class="flex items-center gap-3">
+                    <input type="file" id="sql-upload" accept=".sql" class="text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border file:border-gray-300 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-50 file:cursor-pointer file:transition">
+                    <button onclick="dbUpload('replace')" class="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg px-4 py-2 text-sm transition">Replace</button>
+                    <button onclick="dbUpload('merge')" class="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition">Merge</button>
+                </div>
             </div>
 
             <div id="db-output" class="hidden">
@@ -441,7 +466,114 @@ async function dbImport() {
     }
 
     btn.disabled = false;
-    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Sync DB';
+    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Replace';
+}
+
+// ═══════════════════════════════════════════════════════════
+// DB MERGE (add new records, keep existing)
+// ═══════════════════════════════════════════════════════════
+async function dbMerge() {
+    if (!confirm('This will add new records from the snapshot to this database. Existing records stay unchanged. Continue?')) return;
+
+    const btn = document.getElementById('db-merge-btn');
+    const box = document.getElementById('db-output');
+    const pre = box.querySelector('pre');
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Merging...';
+
+    try {
+        const r = await fetch(BASE_PATH + '/api/settings_api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: 'db_merge' })
+        });
+        const result = await r.json();
+        box.classList.remove('hidden');
+
+        if (result.success) {
+            pre.textContent = `✅ Database merged successfully!\n\nNew records added: ${result.inserted}\nDuplicates skipped: ${result.skipped}\nTables checked: ${result.tables_checked}\nSnapshot date: ${result.snapshot_date}`;
+            pre.classList.remove('text-red-400');
+            pre.classList.add('text-green-400');
+            showToast('Database merged');
+        } else {
+            let msg = 'Error: ' + (result.error || 'Merge had errors');
+            if (result.errors && result.errors.length > 0) {
+                msg += '\n\nInserted: ' + result.inserted + ' | Skipped: ' + result.skipped;
+                msg += '\n\nErrors:\n' + result.errors.join('\n');
+            }
+            pre.textContent = msg;
+            pre.classList.remove('text-green-400');
+            pre.classList.add('text-red-400');
+        }
+    } catch (e) {
+        box.classList.remove('hidden');
+        pre.textContent = 'Error: ' + e.message;
+        pre.classList.add('text-red-400');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Merge';
+}
+
+// ═══════════════════════════════════════════════════════════
+// DB UPLOAD (file upload with replace or merge)
+// ═══════════════════════════════════════════════════════════
+async function dbUpload(mode) {
+    const fileInput = document.getElementById('sql-upload');
+    if (!fileInput.files.length) {
+        alert('Please select a .sql file first.');
+        return;
+    }
+
+    const label = mode === 'merge' ? 'merge into' : 'REPLACE';
+    if (!confirm(`This will ${label} the database using the uploaded file. Continue?`)) return;
+
+    const box = document.getElementById('db-output');
+    const pre = box.querySelector('pre');
+    pre.textContent = 'Uploading and processing...';
+    pre.classList.remove('text-red-400');
+    pre.classList.add('text-green-400');
+    box.classList.remove('hidden');
+
+    try {
+        const fd = new FormData();
+        fd.append('action', 'db_upload');
+        fd.append('mode', mode);
+        fd.append('sqlfile', fileInput.files[0]);
+
+        const r = await fetch(BASE_PATH + '/api/settings_api.php', {
+            method: 'POST',
+            body: fd
+        });
+        const result = await r.json();
+
+        if (result.success) {
+            let msg = `✅ Upload ${mode} completed!\n\nFile: ${result.filename}\nStatements: ${result.statements}`;
+            if (mode === 'merge') {
+                msg += `\nNew records added: ${result.inserted}\nDuplicates skipped: ${result.skipped}`;
+            }
+            pre.textContent = msg;
+            pre.classList.remove('text-red-400');
+            pre.classList.add('text-green-400');
+            showToast(`Database ${mode} complete`);
+        } else {
+            let msg = 'Error: ' + (result.error || `${mode} had errors`);
+            if (result.errors && result.errors.length > 0) {
+                msg += '\n\nStatements: ' + result.statements;
+                msg += '\n\nErrors:\n' + result.errors.join('\n');
+            }
+            pre.textContent = msg;
+            pre.classList.remove('text-green-400');
+            pre.classList.add('text-red-400');
+        }
+    } catch (e) {
+        pre.textContent = 'Error: ' + e.message;
+        pre.classList.remove('text-green-400');
+        pre.classList.add('text-red-400');
+    }
+
+    fileInput.value = '';
 }
 
 // ═══════════════════════════════════════════════════════════

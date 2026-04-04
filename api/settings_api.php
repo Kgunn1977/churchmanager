@@ -238,6 +238,180 @@ switch ($action) {
         break;
     }
 
+    // ── Merge database from SQL snapshot (add new records, skip existing) ──
+    case 'db_merge': {
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }
+
+        $root = realpath(__DIR__ . '/..');
+        $file = $root . '/data/db_snapshot.sql';
+
+        if (!file_exists($file)) {
+            echo json_encode(['error' => 'No snapshot file found. Run push.bat + Git Pull first.']);
+            break;
+        }
+
+        $sql = file_get_contents($file);
+        if (!$sql) {
+            echo json_encode(['error' => 'Snapshot file is empty']);
+            break;
+        }
+
+        $fileTime = date('Y-m-d H:i:s', filemtime($file));
+        $errors = [];
+        $inserted = 0;
+        $skipped = 0;
+        $tablesCreated = 0;
+
+        $db->exec("SET FOREIGN_KEY_CHECKS = 0");
+
+        // Parse SQL into statements
+        $statements = [];
+        $current = '';
+        foreach (explode("\n", $sql) as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || strpos($trimmed, '--') === 0) continue;
+            $current .= $line . "\n";
+            if (preg_match('/;\s*$/', $trimmed)) {
+                $stmt = trim($current);
+                if ($stmt) $statements[] = $stmt;
+                $current = '';
+            }
+        }
+
+        foreach ($statements as $stmt) {
+            try {
+                // DROP TABLE — skip entirely in merge mode
+                if (preg_match('/^DROP\s+TABLE/i', $stmt)) {
+                    continue;
+                }
+
+                // CREATE TABLE — convert to IF NOT EXISTS
+                if (preg_match('/^CREATE\s+TABLE/i', $stmt)) {
+                    $stmt = preg_replace('/^CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i', 'CREATE TABLE IF NOT EXISTS ', $stmt);
+                    $db->exec($stmt);
+                    $tablesCreated++;
+                    continue;
+                }
+
+                // INSERT — convert to INSERT IGNORE (skips on duplicate primary key)
+                if (preg_match('/^INSERT\s+INTO/i', $stmt)) {
+                    $mergeStmt = preg_replace('/^INSERT\s+INTO/i', 'INSERT IGNORE INTO', $stmt);
+                    $affected = $db->exec($mergeStmt);
+                    if ($affected > 0) {
+                        $inserted += $affected;
+                    } else {
+                        $skipped++;
+                    }
+                    continue;
+                }
+
+                // SET statements etc — execute as-is
+                $db->exec($stmt);
+            } catch (PDOException $e) {
+                $errors[] = substr($e->getMessage(), 0, 200);
+            }
+        }
+
+        $db->exec("SET FOREIGN_KEY_CHECKS = 1");
+
+        echo json_encode([
+            'success' => count($errors) === 0,
+            'inserted' => $inserted,
+            'skipped' => $skipped,
+            'tables_checked' => $tablesCreated,
+            'errors' => $errors,
+            'snapshot_date' => $fileTime
+        ]);
+        break;
+    }
+
+    // ── Import from uploaded SQL file (replace or merge) ────
+    case 'db_upload': {
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }
+
+        if (!isset($_FILES['sqlfile']) || $_FILES['sqlfile']['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(['error' => 'No file uploaded or upload error']);
+            break;
+        }
+
+        $mode = $_POST['mode'] ?? 'replace';
+        $sql = file_get_contents($_FILES['sqlfile']['tmp_name']);
+        if (!$sql) {
+            echo json_encode(['error' => 'Uploaded file is empty']);
+            break;
+        }
+
+        // Also save to data/db_snapshot.sql for future use
+        $root = realpath(__DIR__ . '/..');
+        if (!is_dir($root . '/data')) mkdir($root . '/data', 0755, true);
+        file_put_contents($root . '/data/db_snapshot.sql', $sql);
+
+        $errors = [];
+        $stmtCount = 0;
+        $inserted = 0;
+        $skipped = 0;
+
+        $db->exec("SET FOREIGN_KEY_CHECKS = 0");
+
+        // Parse SQL
+        $statements = [];
+        $current = '';
+        foreach (explode("\n", $sql) as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || strpos($trimmed, '--') === 0) continue;
+            $current .= $line . "\n";
+            if (preg_match('/;\s*$/', $trimmed)) {
+                $stmt = trim($current);
+                if ($stmt) $statements[] = $stmt;
+                $current = '';
+            }
+        }
+
+        foreach ($statements as $stmt) {
+            try {
+                if ($mode === 'merge') {
+                    // Merge mode: skip DROP, CREATE IF NOT EXISTS, INSERT IGNORE
+                    if (preg_match('/^DROP\s+TABLE/i', $stmt)) continue;
+                    if (preg_match('/^CREATE\s+TABLE/i', $stmt)) {
+                        $stmt = preg_replace('/^CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i', 'CREATE TABLE IF NOT EXISTS ', $stmt);
+                        $db->exec($stmt);
+                        $stmtCount++;
+                        continue;
+                    }
+                    if (preg_match('/^INSERT\s+INTO/i', $stmt)) {
+                        $mergeStmt = preg_replace('/^INSERT\s+INTO/i', 'INSERT IGNORE INTO', $stmt);
+                        $affected = $db->exec($mergeStmt);
+                        $inserted += max(0, $affected);
+                        if ($affected == 0) $skipped++;
+                        $stmtCount++;
+                        continue;
+                    }
+                }
+                // Replace mode or non-INSERT/CREATE statements: execute as-is
+                $db->exec($stmt);
+                $stmtCount++;
+            } catch (PDOException $e) {
+                $errors[] = substr($e->getMessage(), 0, 200);
+            }
+        }
+
+        $db->exec("SET FOREIGN_KEY_CHECKS = 1");
+
+        $result = [
+            'success' => count($errors) === 0,
+            'mode' => $mode,
+            'statements' => $stmtCount,
+            'errors' => $errors,
+            'filename' => $_FILES['sqlfile']['name']
+        ];
+        if ($mode === 'merge') {
+            $result['inserted'] = $inserted;
+            $result['skipped'] = $skipped;
+        }
+        echo json_encode($result);
+        break;
+    }
+
     // ── Git push (commit & push to GitHub) ─────────────────
     case 'git_push': {
         if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }

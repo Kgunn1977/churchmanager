@@ -545,7 +545,7 @@ html, body {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <p>No tasks for this day <span style="color:#d1d5db;font-size:10px;">v13</span></p>
+            <p>No tasks for this day</p>
             <small>Select a different date or check with your supervisor.</small>
         </div>
     </div>
@@ -1290,7 +1290,7 @@ function showEmptyState(allDone) {
         empty.querySelector('p').textContent = 'All tasks completed!';
         empty.querySelector('small').textContent = 'Tap "Show Hidden" to review.';
     } else {
-        empty.querySelector('p').innerHTML = 'No tasks for this day <span style="color:#d1d5db;font-size:10px;">v13</span>';
+        empty.querySelector('p').innerHTML = 'No tasks for this day';
         empty.querySelector('small').textContent = 'Select a different date or check with your supervisor.';
     }
 }
