@@ -548,7 +548,7 @@ window.scrollTo(0, 0);
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <p>No tasks for this day</p>
+            <p>No tasks for this day <span style="color:#d1d5db;font-size:10px;">v8</span></p>
             <small>Select a different date or check with your supervisor.</small>
         </div>
     </div>
