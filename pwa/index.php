@@ -8,38 +8,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// ── Handle inline login (no redirects — fixes Android PWA top bar issue) ──
-$_loginError = '';
-if (!isLoggedIn() && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pwa_login'])) {
-    $email    = trim($_POST['email'] ?? '');
-    $password = trim($_POST['password'] ?? '');
-    if (!$email || !$password) {
-        $_loginError = 'Please enter your email and password.';
-    } else {
-        $db = getDB();
-        $stmt = $db->prepare("SELECT * FROM users WHERE email = ? AND is_active = 1 LIMIT 1");
-        $stmt->execute([$email]);
-        $_authUser = $stmt->fetch();
-        if ($_authUser && password_verify($password, $_authUser['password'])) {
-            loginUser($_authUser);
-            // Do a clean GET reload — a POST response would cause the browser
-            // to restore scroll position to where the login form was, hiding the top bar.
-            echo '<!DOCTYPE html><html><head>';
-            echo '<meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">';
-            echo '</head><body style="background:#1e40af;">';
-            echo '<script>window.location.replace(window.location.pathname);</script>';
-            echo '</body></html>';
-            exit;
-        } else {
-            $_loginError = 'Incorrect email or password.';
-        }
-    }
-}
-
-// If still not logged in, show inline login form and exit
+// If not logged in, show inline login form with AJAX submit (no page navigation at all)
 if (!isLoggedIn()) {
-    // Show login form directly inside index.php — no redirect means the Android
-    // WebAPK never leaves the start_url, so the app shell renders correctly.
     ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -71,7 +41,8 @@ if (!isLoggedIn()) {
         .logo h1 { color: #fff; font-size: 22px; font-weight: 700; }
         .logo p { color: rgba(255,255,255,.7); font-size: 14px; margin-top: 4px; }
         .card { background: #fff; border-radius: 20px; padding: 28px 24px; box-shadow: 0 8px 32px rgba(0,0,0,.12); }
-        .error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 12px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .error { display:none; background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 12px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; align-items: center; gap: 8px; }
+        .error.visible { display: flex; }
         label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
         input[type=email], input[type=password] {
             width: 100%; padding: 12px 14px; border: 1px solid #d1d5db;
@@ -86,6 +57,7 @@ if (!isLoggedIn()) {
             cursor: pointer; transition: background .15s; font-family: inherit;
         }
         .btn:active { background: #1d4ed8; }
+        .btn:disabled { opacity: .6; }
         .footer { text-align: center; color: rgba(255,255,255,.5); font-size: 12px; margin-top: 24px; }
     </style>
 </head>
@@ -101,33 +73,61 @@ if (!isLoggedIn()) {
             <p>Sign in to view your assignments</p>
         </div>
         <div class="card">
-            <?php if ($_loginError): ?>
-                <div class="error">
-                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
-                    <?= htmlspecialchars($_loginError) ?>
-                </div>
-            <?php endif; ?>
-            <form method="POST" novalidate>
-                <input type="hidden" name="pwa_login" value="1">
+            <div class="error" id="loginError">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                <span id="loginErrorText"></span>
+            </div>
+            <form id="loginForm" onsubmit="return doLogin(event)" novalidate>
                 <div class="field">
                     <label for="email">Email</label>
-                    <input type="email" id="email" name="email" placeholder="you@yourchurch.org"
-                           value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required autocomplete="email">
+                    <input type="email" id="email" name="email" placeholder="you@yourchurch.org" required autocomplete="email">
                 </div>
                 <div class="field">
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
                 </div>
-                <button type="submit" class="btn">Sign In</button>
+                <button type="submit" class="btn" id="loginBtn">Sign In</button>
                 <a href="<?= url('/forgot_password.php?pwa=1') ?>" style="display:block;text-align:center;margin-top:16px;color:#3b82f6;font-size:13px;font-weight:600;text-decoration:none;">Forgot your password?</a>
             </form>
         </div>
         <p class="footer">Church Facility Manager</p>
     </div>
     <script>
+    const BASE_PATH = <?= json_encode(BASE_PATH) ?>;
     if ('serviceWorker' in navigator) {
-        const BASE_PATH = <?= json_encode(BASE_PATH) ?>;
         navigator.serviceWorker.register(BASE_PATH + '/pwa/sw.js?base=' + encodeURIComponent(BASE_PATH));
+    }
+    async function doLogin(e) {
+        e.preventDefault(); // No form submission — no page navigation
+        const btn = document.getElementById('loginBtn');
+        const errBox = document.getElementById('loginError');
+        const errText = document.getElementById('loginErrorText');
+        btn.disabled = true;
+        btn.textContent = 'Signing in...';
+        errBox.classList.remove('visible');
+        try {
+            const fd = new FormData(document.getElementById('loginForm'));
+            const resp = await fetch(BASE_PATH + '/pwa/login_api.php', {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin'
+            });
+            const data = await resp.json();
+            if (data.success) {
+                // Session is now active — reload this same page as a fresh GET.
+                // No navigation to a different URL, so Android PWA renders correctly.
+                window.location.reload();
+                return;
+            }
+            errText.textContent = data.error || 'Login failed.';
+            errBox.classList.add('visible');
+        } catch(ex) {
+            errText.textContent = 'Connection error. Please try again.';
+            errBox.classList.add('visible');
+        }
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+        return false;
     }
     </script>
 </body>
@@ -548,7 +548,7 @@ window.scrollTo(0, 0);
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <p>No tasks for this day <span style="color:#d1d5db;font-size:10px;">v8</span></p>
+            <p>No tasks for this day <span style="color:#d1d5db;font-size:10px;">v9</span></p>
             <small>Select a different date or check with your supervisor.</small>
         </div>
     </div>
@@ -1293,7 +1293,7 @@ function showEmptyState(allDone) {
         empty.querySelector('p').textContent = 'All tasks completed!';
         empty.querySelector('small').textContent = 'Tap "Show Hidden" to review.';
     } else {
-        empty.querySelector('p').innerHTML = 'No tasks for this day <span style="color:#d1d5db;font-size:10px;">v8</span>';
+        empty.querySelector('p').innerHTML = 'No tasks for this day <span style="color:#d1d5db;font-size:10px;">v9</span>';
         empty.querySelector('small').textContent = 'Select a different date or check with your supervisor.';
     }
 }
