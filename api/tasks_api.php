@@ -587,6 +587,7 @@ switch ($action) {
                    COALESCE(tg.estimated_minutes, 0) AS estimated_minutes,
                    COALESCE(tt.name, tt2.name, '') AS type_name,
                    rm.name AS room_name,
+                   rm.floor_id AS floor_id,
                    fl.name AS floor_name,
                    b.name  AS building_name,
                    CASE

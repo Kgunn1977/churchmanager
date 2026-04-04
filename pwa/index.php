@@ -447,6 +447,21 @@ html, body {
     background: none; border: 1px solid #e5e7eb; border-radius: 12px;
     font-size: 14px; font-weight: 600; color: #374151; cursor: pointer;
 }
+/* ── Floor Map in Task Detail ──────────────────────────── */
+.td-location {
+    font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+}
+.td-location svg { flex-shrink: 0; }
+.td-map-wrap {
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 8px; margin-bottom: 14px; overflow: hidden;
+}
+.td-map-wrap svg { display: block; width: 100%; height: auto; }
+.td-map-loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 80px; color: #9ca3af; font-size: 12px;
+}
 
 /* ── Toolbar (Sort / Show Hidden) ────────────────────────── */
 .pwa-toolbar {
@@ -571,6 +586,7 @@ const STRIP_DAYS_FORWARD = <?= (int)$_pwaStripForward ?>;
 const STRIP_TOTAL = STRIP_DAYS_BACK + 1 + STRIP_DAYS_FORWARD;
 const SCHED_MODE = <?= json_encode($_pwaSchedMode) ?>;
 let taskDetailCache = {}; // task_id => checklist item with resources, description, etc.
+let floorRoomsCache = {}; // floor_id => [{ id, name, abbreviation, map_points }]
 
 // ═══════════════════════════════════════════════════════════
 // LOGOUT — clear caches before redirecting
@@ -821,13 +837,42 @@ function calSelect(ds) {
 // ═══════════════════════════════════════════════════════════
 // TASK DETAIL POPUP
 // ═══════════════════════════════════════════════════════════
-function openTaskDetail(taskId) {
-    const c = taskDetailCache[taskId];
+function openTaskDetail(assignmentId, taskId) {
+    const cacheKey = assignmentId + '_' + taskId;
+    const c = taskDetailCache[cacheKey] || taskDetailCache[taskId];
     if (!c) return;
     const box = document.getElementById('taskDetailBox');
     const r = c.resources || {};
 
-    let html = `<h3>${esc(c.task_name)}</h3>`;
+    // Find parent assignment to get room/floor context
+    let roomId = c.room_id || null;
+    let floorId = c.floor_id || null;
+    let floorName = c.floor_name || '';
+    let buildingName = c.building_name || '';
+    if (!roomId && assignmentId) {
+        // Look up the specific assignment by ID
+        const a = assignments.find(a => a.id == assignmentId);
+        if (a) {
+            roomId = a.room_id;
+            floorId = a.floor_id;
+            floorName = a.floor_name || floorName;
+            buildingName = a.building_name || buildingName;
+        }
+    }
+
+    // Build location header + map placeholder
+    let html = '';
+    if (buildingName || floorName) {
+        html += `<div class="td-location">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            ${esc(buildingName)}${floorName ? ' — ' + esc(floorName) : ''}
+        </div>`;
+    }
+    if (floorId && roomId) {
+        html += `<div class="td-map-wrap" id="tdMapWrap"><div class="td-map-loading">Loading map…</div></div>`;
+    }
+
+    html += `<h3>${esc(c.task_name)}</h3>`;
 
     if (c.task_description) {
         html += `<div class="td-desc">${esc(c.task_description)}</div>`;
@@ -857,6 +902,97 @@ function openTaskDetail(taskId) {
     html += `<button class="task-detail-close" onclick="closeTaskDetail()">Close</button>`;
     box.innerHTML = html;
     document.getElementById('taskDetailOverlay').classList.add('visible');
+
+    // Load and render the floor map asynchronously
+    if (floorId && roomId) {
+        loadFloorMap(floorId, roomId);
+    }
+}
+
+// ── Floor map loader ──
+function loadFloorMap(floorId, highlightRoomId) {
+    const wrap = document.getElementById('tdMapWrap');
+    if (!wrap) return;
+
+    // Use cache if available
+    if (floorRoomsCache[floorId]) {
+        renderFloorMapSVG(wrap, floorRoomsCache[floorId], highlightRoomId);
+        return;
+    }
+
+    fetch(BASE_PATH + `/api/floor_editor_api.php?action=get_rooms&floor_id=${floorId}`)
+        .then(r => r.json())
+        .then(rooms => {
+            floorRoomsCache[floorId] = rooms;
+            renderFloorMapSVG(wrap, rooms, highlightRoomId);
+        })
+        .catch(() => {
+            wrap.innerHTML = '<div class="td-map-loading">Map unavailable</div>';
+        });
+}
+
+function renderFloorMapSVG(wrap, rooms, highlightRoomId) {
+    // Filter rooms that have map_points
+    const mapped = rooms.filter(r => r.map_points && r.map_points.length >= 3);
+    if (!mapped.length) {
+        wrap.innerHTML = '<div class="td-map-loading">No floor plan available</div>';
+        return;
+    }
+
+    // Calculate bounding box across all rooms
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    mapped.forEach(r => {
+        r.map_points.forEach(([x, y]) => {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+        });
+    });
+
+    const pad = 5;
+    const vx = minX - pad, vy = minY - pad;
+    const vw = (maxX - minX) + pad * 2;
+    const vh = (maxY - minY) + pad * 2;
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    mapped.forEach(room => {
+        const isHighlight = room.id == highlightRoomId;
+        const pts = room.map_points.map(([x, y]) => `${x},${y}`).join(' ');
+
+        const poly = document.createElementNS(ns, 'polygon');
+        poly.setAttribute('points', pts);
+        poly.setAttribute('fill', isHighlight ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.12)');
+        poly.setAttribute('stroke', isHighlight ? '#dc2626' : '#93c5fd');
+        poly.setAttribute('stroke-width', isHighlight ? '1' : '0.5');
+        poly.setAttribute('vector-effect', 'non-scaling-stroke');
+        svg.appendChild(poly);
+
+        // Label — use abbreviation or first 3 chars of name
+        const label = room.abbreviation || room.name.substring(0, 4);
+        const cx = room.map_points.reduce((s, p) => s + p[0], 0) / room.map_points.length;
+        const cy = room.map_points.reduce((s, p) => s + p[1], 0) / room.map_points.length;
+
+        const txt = document.createElementNS(ns, 'text');
+        txt.setAttribute('x', cx);
+        txt.setAttribute('y', cy);
+        txt.setAttribute('text-anchor', 'middle');
+        txt.setAttribute('dominant-baseline', 'central');
+        txt.setAttribute('fill', isHighlight ? '#991b1b' : '#3b82f6');
+        txt.setAttribute('font-size', isHighlight ? '4' : '3');
+        txt.setAttribute('font-weight', isHighlight ? '800' : '600');
+        txt.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+        txt.textContent = label;
+        svg.appendChild(txt);
+    });
+
+    wrap.innerHTML = '';
+    wrap.appendChild(svg);
 }
 
 function closeTaskDetail() {
@@ -1094,9 +1230,9 @@ function renderRoomsView() {
     const rooms = {};
     assignments.forEach(a => {
         const key = a.room_name + ' · ' + a.building_name;
-        if (!rooms[key]) rooms[key] = { room_name: a.room_name, building_name: a.building_name, items: [] };
+        if (!rooms[key]) rooms[key] = { room_name: a.room_name, building_name: a.building_name, room_id: a.room_id, floor_id: a.floor_id, floor_name: a.floor_name, items: [] };
         (a.checklist || []).forEach(c => {
-            rooms[key].items.push({ ...c, assignment_id: a.id, group_name: a.group_name });
+            rooms[key].items.push({ ...c, assignment_id: a.id, group_name: a.group_name, room_id: a.room_id, floor_id: a.floor_id, floor_name: a.floor_name, building_name: a.building_name });
         });
     });
 
@@ -1160,7 +1296,7 @@ function renderTaskView() {
         (a.checklist || []).forEach(c => {
             const tName = c.task_name;
             if (!taskMap[tName]) taskMap[tName] = [];
-            taskMap[tName].push({ ...c, assignment_id: a.id, room_name: a.room_name, building_name: a.building_name });
+            taskMap[tName].push({ ...c, assignment_id: a.id, room_name: a.room_name, building_name: a.building_name, room_id: a.room_id, floor_id: a.floor_id, floor_name: a.floor_name });
         });
     });
 
@@ -1185,13 +1321,13 @@ function renderTaskView() {
         let bodyHtml = '';
         items.forEach(c => {
             if (!showHidden && c.completed == 1) return;
-            taskDetailCache[c.task_id] = c;
+            taskDetailCache[c.assignment_id + '_' + c.task_id] = c;
             // Show room name as the label instead of task name
             bodyHtml += `
                 <div class="check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}" data-assignment-id="${c.assignment_id}">
                     <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
                            onchange="toggleCheck(${c.assignment_id}, ${c.task_id}, this.checked)">
-                    <span class="check-label" onclick="openTaskDetail(${c.task_id})">${esc(c.room_name)} · ${esc(c.building_name)}</span>
+                    <span class="check-label" onclick="openTaskDetail(${c.assignment_id}, ${c.task_id})">${esc(c.room_name)} · ${esc(c.building_name)}</span>
                 </div>`;
         });
 
@@ -1344,13 +1480,13 @@ function buildSubGroupBody(assignmentId, checklist) {
 
 function renderCheckItem(assignmentId, c, hidden) {
     const hideStyle = hidden ? ' style="display:none;"' : '';
-    // Store task detail for popup
-    taskDetailCache[c.task_id] = c;
+    // Store task detail for popup — composite key to handle same task in multiple rooms
+    taskDetailCache[assignmentId + '_' + c.task_id] = c;
     return `
         <div class="check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}" data-assignment-id="${assignmentId}"${hideStyle}>
             <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
                    onchange="toggleCheck(${assignmentId}, ${c.task_id}, this.checked)">
-            <span class="check-label" onclick="openTaskDetail(${c.task_id})">${esc(c.task_name)}</span>
+            <span class="check-label" onclick="openTaskDetail(${assignmentId}, ${c.task_id})">${esc(c.task_name)}</span>
         </div>`;
 }
 
