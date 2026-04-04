@@ -357,7 +357,7 @@ html, body {
         </div>
         <div class="top-bar-right">
             <div class="sync-indicator" id="syncDot" title="Online"></div>
-            <button class="logout-btn" onclick="location.href=BASE_PATH+'/pwa/login.php?logout=1'">Sign Out</button>
+            <button class="logout-btn" onclick="doLogout()">Sign Out</button>
         </div>
     </div>
 
@@ -438,6 +438,22 @@ const STRIP_DAYS_FORWARD = <?= (int)$_pwaStripForward ?>;
 const STRIP_TOTAL = STRIP_DAYS_BACK + 1 + STRIP_DAYS_FORWARD;
 const SCHED_MODE = <?= json_encode($_pwaSchedMode) ?>;
 let taskDetailCache = {}; // task_id => checklist item with resources, description, etc.
+
+// ═══════════════════════════════════════════════════════════
+// LOGOUT — clear caches before redirecting
+// ═══════════════════════════════════════════════════════════
+async function doLogout() {
+    try {
+        // Clear all caches so stale pages can't bypass login
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+        // Clear localStorage task caches
+        Object.keys(localStorage).forEach(k => {
+            if (k.startsWith('cfm_')) localStorage.removeItem(k);
+        });
+    } catch(e) {}
+    location.href = BASE_PATH + '/pwa/login.php?logout=1';
+}
 
 // ═══════════════════════════════════════════════════════════
 // SERVICE WORKER REGISTRATION

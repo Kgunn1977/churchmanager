@@ -117,6 +117,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     Sign In
                 </button>
 
+                <div class="text-center mt-4">
+                    <a href="<?= url('/forgot_password.php') ?>" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        Forgot your password?
+                    </a>
+                </div>
+
             </form>
         </div>
 

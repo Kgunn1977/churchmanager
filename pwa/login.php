@@ -137,6 +137,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn">Sign In</button>
+
+                <a href="<?= url('/forgot_password.php?pwa=1') ?>" style="display:block;text-align:center;margin-top:16px;color:#3b82f6;font-size:13px;font-weight:600;text-decoration:none;">
+                    Forgot your password?
+                </a>
             </form>
         </div>
 

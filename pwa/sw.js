@@ -1,12 +1,13 @@
 // Extract BASE_PATH from query parameter passed during registration
 const BASE_PATH = new URL(self.location).searchParams.get('base') || '';
-const CACHE_NAME = 'cfm-tasks-v2';
+const CACHE_NAME = 'cfm-tasks-v4';
 const STATIC_ASSETS = [
-    BASE_PATH + '/pwa/index.php',
     BASE_PATH + '/pwa/manifest.php',
     BASE_PATH + '/pwa/icons/icon-192.svg',
     BASE_PATH + '/pwa/icons/icon-512.svg'
 ];
+// Never cache these — auth-sensitive pages
+const NO_CACHE = ['/login.php', '/logout.php', '/pwa/login.php', '/forgot_password.php', '/reset_password.php'];
 
 // ═══════════════════════════════════════════════════════════
 // INSTALL — cache static shell
@@ -36,11 +37,26 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
 
+    // Never cache auth-related pages — always go to network
+    const isNoCachePage = NO_CACHE.some(p => url.pathname.endsWith(p));
+    if (isNoCachePage || e.request.method === 'POST') {
+        e.respondWith(fetch(e.request));
+        return;
+    }
+
     // PHP pages (HTML): network-first, fall back to cache
     if (url.pathname.endsWith('.php') || url.pathname.endsWith('/')) {
         e.respondWith(
             fetch(e.request)
                 .then(response => {
+                    // If server redirected to login, the session expired — clear cache
+                    if (response.redirected && response.url.includes('login.php')) {
+                        caches.open(CACHE_NAME).then(c => c.keys().then(keys =>
+                            Promise.all(keys.filter(k => !STATIC_ASSETS.some(a => k.url.includes(a)))
+                                .map(k => c.delete(k)))
+                        ));
+                        return response;
+                    }
                     if (response.ok) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
@@ -57,7 +73,6 @@ self.addEventListener('fetch', e => {
         e.respondWith(
             fetch(e.request)
                 .then(response => {
-                    // Cache GET requests for offline use
                     if (e.request.method === 'GET' && response.ok) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
