@@ -28,4 +28,9 @@ if (function_exists('opcache_get_status')) {
 
 echo "\n=== Git info ===\n";
 echo "HEAD: " . trim(shell_exec('cd ' . escapeshellarg(dirname(__DIR__)) . ' && git log --oneline -1 2>&1')) . "\n";
+// Also reset entire OPcache to be thorough
+if (function_exists('opcache_reset')) {
+    opcache_reset();
+    echo "Full OPcache reset: DONE\n";
+}
 echo "\nDone. Reload index.php now.\n";

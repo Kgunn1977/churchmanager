@@ -1293,7 +1293,7 @@ function showEmptyState(allDone) {
         empty.querySelector('p').textContent = 'All tasks completed!';
         empty.querySelector('small').textContent = 'Tap "Show Hidden" to review.';
     } else {
-        empty.querySelector('p').textContent = 'No tasks for this day';
+        empty.querySelector('p').innerHTML = 'No tasks for this day <span style="color:#d1d5db;font-size:10px;">v8</span>';
         empty.querySelector('small').textContent = 'Select a different date or check with your supervisor.';
     }
 }
