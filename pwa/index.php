@@ -117,8 +117,6 @@ if (!isLoggedIn()) {
         </div>
         <p class="footer">Church Facility Manager</p>
     </div>
-    <?php if ('serviceWorker' in ['placeholder']): /* Register SW even on login page so PWA install works */ ?>
-    <?php endif; ?>
     <script>
     if ('serviceWorker' in navigator) {
         const BASE_PATH = <?= json_encode(BASE_PATH) ?>;
