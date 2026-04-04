@@ -648,12 +648,15 @@ switch ($action) {
         $completed    = (int)($_POST['completed'] ?? 0);
         if (!$assignmentId || !$taskId) { echo json_encode(['error' => 'Assignment and task IDs required']); exit; }
 
+        $currentUser = getCurrentUser();
+        $completedBy = $completed ? (int)$currentUser['id'] : null;
+
         $stmt = $db->prepare("
             UPDATE janitor_task_checklist
-            SET completed = ?, completed_at = IF(? = 1, NOW(), NULL)
+            SET completed = ?, completed_at = IF(? = 1, NOW(), NULL), completed_by = IF(? = 1, ?, NULL)
             WHERE assignment_id = ? AND task_id = ?
         ");
-        $stmt->execute([$completed, $completed, $assignmentId, $taskId]);
+        $stmt->execute([$completed, $completed, $completed, $completedBy, $assignmentId, $taskId]);
 
         // Check if all items are complete → update assignment status
         $s = $db->prepare("SELECT COUNT(*) AS total, SUM(completed) AS done FROM janitor_task_checklist WHERE assignment_id = ?");
@@ -855,6 +858,91 @@ switch ($action) {
 
         $tree = buildGroupTree($groupId, $db);
         echo json_encode($tree ?: ['error' => 'Not found']);
+        break;
+
+    // ═══════════════════════════════════════════════════════════
+    // TASK COMPLETION LOG
+    // ═══════════════════════════════════════════════════════════
+
+    case 'get_task_log':
+        // Check role access
+        $user = getCurrentUser();
+        if ($user['role'] !== 'admin' && $user['role'] !== 'scheduler') {
+            echo json_encode(['error' => 'Access denied']);
+            exit;
+        }
+
+        $startDate = trim($_GET['start_date'] ?? '');
+        $endDate = trim($_GET['end_date'] ?? '');
+        $userId = (int)($_GET['user_id'] ?? 0);
+        $roomId = (int)($_GET['room_id'] ?? 0);
+        $buildingId = (int)($_GET['building_id'] ?? 0);
+        $taskSearch = trim($_GET['task_search'] ?? '');
+
+        $where = [];
+        $params = [];
+
+        // Date range filter
+        if ($startDate) {
+            $where[] = "DATE(jtc.completed_at) >= ?";
+            $params[] = $startDate;
+        }
+        if ($endDate) {
+            $where[] = "DATE(jtc.completed_at) <= ?";
+            $params[] = $endDate;
+        }
+
+        // Worker filter
+        if ($userId) {
+            $where[] = "jtc.completed_by = ?";
+            $params[] = $userId;
+        }
+
+        // Room filter
+        if ($roomId) {
+            $where[] = "jta.room_id = ?";
+            $params[] = $roomId;
+        }
+
+        // Building filter (via rooms → floors → buildings)
+        if ($buildingId) {
+            $where[] = "b.id = ?";
+            $params[] = $buildingId;
+        }
+
+        // Task name search
+        if ($taskSearch) {
+            $where[] = "t.name LIKE ?";
+            $params[] = '%' . $taskSearch . '%';
+        }
+
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $stmt = $db->prepare("
+            SELECT
+                jtc.completed_at,
+                u.name AS worker_name,
+                t.name AS task_name,
+                tg.name AS group_name,
+                rm.name AS room_name,
+                b.name AS building_name,
+                jtc.completed
+            FROM janitor_task_checklist jtc
+            LEFT JOIN janitor_task_assignments jta ON jta.id = jtc.assignment_id
+            LEFT JOIN users u ON u.id = jtc.completed_by
+            LEFT JOIN tasks t ON t.id = jtc.task_id
+            LEFT JOIN task_groups tg ON tg.id = jta.task_group_id
+            LEFT JOIN rooms rm ON rm.id = jta.room_id
+            LEFT JOIN floors fl ON fl.id = rm.floor_id
+            LEFT JOIN buildings b ON b.id = fl.building_id
+            {$whereClause}
+            ORDER BY jtc.completed_at DESC
+            LIMIT 500
+        ");
+
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        echo json_encode($rows);
         break;
 
     default:

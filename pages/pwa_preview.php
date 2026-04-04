@@ -23,7 +23,7 @@ $user = getCurrentUser();
                 <div style="position:absolute; top:14px; left:50%; transform:translateX(-50%); width:150px; height:28px; background:#1a1a1a; border-radius:0 0 16px 16px; z-index:10;"></div>
                 <!-- Screen -->
                 <iframe id="pwa-frame"
-                        src="<?= url('/pages/janitor.php') ?>?embed=1"
+                        src="<?= url('/pwa/index.php') ?>?skipinstall=1"
                         style="width:100%; height:100%; border:none; border-radius:32px; background:#fff;"
                         allow="same-origin"></iframe>
             </div>
@@ -69,7 +69,7 @@ $user = getCurrentUser();
         <!-- Quick Links -->
         <label style="display:block; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Quick Links</label>
 
-        <a href="<?= url('/pages/janitor.php') ?>" target="_blank"
+        <a href="<?= url('/pwa/index.php') ?>?skipinstall=1" target="_blank"
            style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:8px; margin-bottom:8px; text-decoration:none; color:#374151; font-size:13px; font-weight:500; transition:background .15s;"
            onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='transparent'">
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>

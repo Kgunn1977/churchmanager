@@ -9,7 +9,8 @@ $user = getCurrentUser();
 
 // If not running as installed PWA, redirect to install page (first visit only)
 // The install page sets a cookie so we don't redirect in a loop
-if (!isset($_COOKIE['cfm_pwa_seen'])) {
+// Skip if loaded in preview iframe (?skipinstall=1)
+if (!isset($_GET['skipinstall']) && !isset($_COOKIE['cfm_pwa_seen'])) {
     setcookie('cfm_pwa_seen', '1', time() + 86400 * 365, url('/pwa/'));
     header('Location: ' . url('/pwa/install.php'));
     exit;
@@ -209,6 +210,68 @@ html, body {
 }
 .offline-banner.visible { display: block; }
 
+/* ── Calendar overlay ─────────────────────────────────────── */
+.cal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4);
+    z-index: 100; align-items: center; justify-content: center;
+}
+.cal-overlay.visible { display: flex; }
+.cal-box {
+    background: #fff; border-radius: 16px; padding: 20px; width: 320px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.25);
+}
+.cal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+}
+.cal-header button {
+    background: none; border: 1px solid #e5e7eb; border-radius: 8px;
+    width: 32px; height: 32px; cursor: pointer; color: #374151;
+    display: flex; align-items: center; justify-content: center;
+}
+.cal-header span { font-size: 15px; font-weight: 700; color: #111827; }
+.cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center;
+}
+.cal-grid .cal-dow { font-size: 10px; font-weight: 700; color: #9ca3af; padding: 4px 0; }
+.cal-grid .cal-day {
+    font-size: 13px; padding: 8px 0; border-radius: 8px; cursor: pointer;
+    font-weight: 600; color: #374151; transition: background .12s;
+}
+.cal-grid .cal-day:hover { background: #eff6ff; }
+.cal-grid .cal-day.today { border: 2px solid #3b82f6; }
+.cal-grid .cal-day.selected { background: #1e40af; color: #fff; }
+.cal-grid .cal-day.outside { color: #d1d5db; }
+.cal-close {
+    display: block; width: 100%; margin-top: 12px; padding: 10px;
+    background: none; border: 1px solid #e5e7eb; border-radius: 10px;
+    font-size: 13px; font-weight: 600; color: #374151; cursor: pointer;
+}
+
+/* ── Toolbar (Sort / Show Hidden) ────────────────────────── */
+.pwa-toolbar {
+    display: flex; gap: 8px; padding: 8px 16px; background: #fff;
+    border-bottom: 1px solid #e5e7eb; flex-shrink: 0;
+}
+.pwa-toolbar button {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 7px 0; border: 1px solid #e5e7eb; border-radius: 10px;
+    background: #fff; font-size: 12px; font-weight: 600; color: #6b7280;
+    cursor: pointer; transition: all .15s;
+}
+.pwa-toolbar button:active { background: #f3f4f6; }
+.pwa-toolbar button.active { background: #eff6ff; border-color: #93c5fd; color: #1e40af; }
+
+/* ── Hide animations ─────────────────────────────────────── */
+.check-item.hiding {
+    opacity: 0; max-height: 0; padding: 0; margin: 0; overflow: hidden;
+    transition: opacity .25s, max-height .3s ease-out, padding .3s;
+}
+.subgroup.hiding, .task-card.hiding {
+    opacity: 0; max-height: 0; margin: 0; overflow: hidden;
+    transition: opacity .25s, max-height .3s ease-out, margin .3s;
+}
+
 /* ── Pull to refresh indicator ────────────────────────────── */
 .refresh-hint {
     text-align: center; font-size: 11px; color: #9ca3af;
@@ -237,8 +300,33 @@ html, body {
     <!-- Date strip (horizontal scrollable week) -->
     <div class="date-strip" id="dateStrip"></div>
 
+    <!-- Toolbar -->
+    <div class="pwa-toolbar">
+        <button id="btnSort" onclick="toggleSort()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4 4m0 0l4-4m-4 4V4"/></svg>
+            Sort
+        </button>
+        <button id="btnShowHidden" onclick="toggleShowHidden()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            <span id="btnShowHiddenLabel">Show Hidden</span>
+        </button>
+    </div>
+
     <!-- Summary -->
     <div class="summary-row" id="summaryRow"></div>
+
+    <!-- Calendar overlay -->
+    <div class="cal-overlay" id="calOverlay" onclick="if(event.target===this)closeCal()">
+        <div class="cal-box">
+            <div class="cal-header">
+                <button onclick="calNav(-1)"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
+                <span id="calTitle"></span>
+                <button onclick="calNav(1)"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
+            </div>
+            <div class="cal-grid" id="calGrid"></div>
+            <button class="cal-close" onclick="closeCal()">Cancel</button>
+        </div>
+    </div>
 
     <!-- Task list -->
     <div class="task-scroll" id="taskScroll">
@@ -265,6 +353,9 @@ const USER_NAME = <?= json_encode($user['name']) ?>;
 let selectedDate = todayStr();
 let assignments = [];
 let isOnline = navigator.onLine;
+let showHidden = false;
+let sortMode = 'default'; // 'default' | 'room' | 'deadline'
+let stripAnchor = null; // null = anchored to today, else a Date object
 
 // ═══════════════════════════════════════════════════════════
 // SERVICE WORKER REGISTRATION
@@ -324,16 +415,26 @@ function parseDate(str) {
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 // ═══════════════════════════════════════════════════════════
-// DATE STRIP — show 2 weeks centered on today
+// DATE STRIP — 2 weeks centered on anchor (today or selected future date)
 // ═══════════════════════════════════════════════════════════
 function renderDateStrip() {
     const strip = document.getElementById('dateStrip');
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const start = new Date(today);
-    start.setDate(start.getDate() - 3); // 3 days before today
+    const today = new Date(); today.setHours(0,0,0,0);
+    const anchor = stripAnchor || today;
+    const start = new Date(anchor);
+    start.setDate(start.getDate() - 3);
 
+    // "more future" chip at end, "back to today" chip if on future anchor
     let html = '';
+
+    // If anchored to a future date, show a "← Today" chip first
+    if (stripAnchor && fmt(stripAnchor) !== fmt(today)) {
+        html += `<div class="date-chip" onclick="jumpToToday()" style="background:#eff6ff;border-color:#93c5fd;min-width:60px;">
+            <span class="day-name" style="color:#1e40af;">←</span>
+            <span class="day-num" style="font-size:11px;color:#1e40af;">Today</span>
+        </div>`;
+    }
+
     for (let i = 0; i < 14; i++) {
         const d = new Date(start);
         d.setDate(d.getDate() + i);
@@ -348,9 +449,15 @@ function renderDateStrip() {
             <span class="day-num">${d.getDate()}</span>
         </div>`;
     }
+
+    // "More ▸" chip at the end to open calendar
+    html += `<div class="date-chip" onclick="openCal()" style="background:#eff6ff;border-color:#93c5fd;min-width:60px;">
+        <span class="day-name" style="color:#1e40af;">More</span>
+        <span class="day-num" style="font-size:14px;color:#1e40af;">📅</span>
+    </div>`;
+
     strip.innerHTML = html;
 
-    // Scroll selected into view
     requestAnimationFrame(() => {
         const sel = strip.querySelector('.selected');
         if (sel) sel.scrollIntoView({ inline: 'center', behavior: 'smooth' });
@@ -359,8 +466,91 @@ function renderDateStrip() {
 
 function selectDate(ds) {
     selectedDate = ds;
+    // If the selected date is far from today, set anchor
+    const sel = parseDate(ds);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diffDays = Math.round((sel - today) / 86400000);
+    if (diffDays > 10) {
+        stripAnchor = sel;
+    }
     renderDateStrip();
     loadAssignments();
+}
+
+function jumpToToday() {
+    stripAnchor = null;
+    selectedDate = todayStr();
+    renderDateStrip();
+    loadAssignments();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CALENDAR OVERLAY
+// ═══════════════════════════════════════════════════════════
+let calMonth, calYear;
+function openCal() {
+    const d = parseDate(selectedDate);
+    calMonth = d.getMonth();
+    calYear = d.getFullYear();
+    renderCal();
+    document.getElementById('calOverlay').classList.add('visible');
+}
+function closeCal() { document.getElementById('calOverlay').classList.remove('visible'); }
+function calNav(dir) { calMonth += dir; if (calMonth > 11) { calMonth = 0; calYear++; } if (calMonth < 0) { calMonth = 11; calYear--; } renderCal(); }
+
+function renderCal() {
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('calTitle').textContent = MONTHS[calMonth] + ' ' + calYear;
+    const grid = document.getElementById('calGrid');
+    let html = ['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => `<div class="cal-dow">${d}</div>`).join('');
+
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const todayS = todayStr();
+
+    // Blank cells before first day
+    for (let i = 0; i < firstDay; i++) html += '<div></div>';
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const ds = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+        let cls = 'cal-day';
+        if (ds === todayS) cls += ' today';
+        if (ds === selectedDate) cls += ' selected';
+        html += `<div class="${cls}" onclick="calSelect('${ds}')">${d}</div>`;
+    }
+    grid.innerHTML = html;
+}
+
+function calSelect(ds) {
+    selectedDate = ds;
+    const sel = parseDate(ds);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diffDays = Math.round((sel - today) / 86400000);
+    stripAnchor = diffDays > 10 ? sel : null;
+    closeCal();
+    renderDateStrip();
+    loadAssignments();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SORT & SHOW HIDDEN
+// ═══════════════════════════════════════════════════════════
+function toggleSort() {
+    const modes = ['default', 'room', 'deadline'];
+    const labels = ['Sort', 'By Room', 'By Deadline'];
+    const idx = (modes.indexOf(sortMode) + 1) % modes.length;
+    sortMode = modes[idx];
+    const btn = document.getElementById('btnSort');
+    btn.querySelector('svg').nextSibling.textContent = ' ' + labels[idx];
+    btn.classList.toggle('active', sortMode !== 'default');
+    renderList();
+}
+
+function toggleShowHidden() {
+    showHidden = !showHidden;
+    document.getElementById('btnShowHidden').classList.toggle('active', showHidden);
+    document.getElementById('btnShowHiddenLabel').textContent = showHidden ? 'Hide Done' : 'Show Hidden';
+    renderList();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -441,16 +631,37 @@ function renderList() {
     const empty = document.getElementById('emptyState');
     list.innerHTML = '';
 
-    if (!assignments.length) {
+    // Sort assignments
+    let sorted = [...assignments];
+    if (sortMode === 'room') {
+        sorted.sort((a, b) => (a.room_name || '').localeCompare(b.room_name || ''));
+    } else if (sortMode === 'deadline') {
+        sorted.sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
+    }
+
+    // Check if anything is visible (not all completed when hiding)
+    const hasVisible = sorted.some(a => showHidden || a.status !== 'completed');
+    if (!sorted.length || !hasVisible) {
         empty.style.display = '';
+        if (sorted.length && !hasVisible) {
+            empty.querySelector('p').textContent = 'All tasks completed!';
+            empty.querySelector('small').textContent = 'Tap "Show Hidden" to review.';
+        } else {
+            empty.querySelector('p').textContent = 'No tasks for this day';
+            empty.querySelector('small').textContent = 'Select a different date or check with your supervisor.';
+        }
         return;
     }
     empty.style.display = 'none';
 
-    assignments.forEach(a => {
+    sorted.forEach(a => {
         const checklist = a.checklist || [];
         const doneCount = checklist.filter(c => c.completed == 1).length;
-        const isComplete = a.status === 'completed';
+        const isComplete = doneCount === checklist.length && checklist.length > 0;
+
+        // Hide completed cards unless showHidden is on
+        if (isComplete && !showHidden) return;
+
         const deadlineHtml = a.deadline ? fmtDeadline(a.deadline) : '';
 
         // Group by sub_group_name
@@ -473,8 +684,16 @@ function renderList() {
                 const items = subGroups[sgName];
                 const sgDone = items.filter(c => c.completed == 1).length;
                 const sgAllDone = sgDone === items.length;
+
+                // Hide completed subgroups unless showHidden
+                const sgHidden = sgAllDone && !showHidden ? ' style="display:none;"' : '';
+
+                // Filter check items: hide done unless showHidden
+                const visibleItems = showHidden ? items : items.filter(c => c.completed != 1);
+                const itemsHtml = (showHidden ? items : visibleItems).map(c => renderCheckItem(a.id, c, !showHidden && c.completed == 1)).join('');
+
                 bodyHtml += `
-                    <div class="subgroup" data-sg-name="${esc(sgName)}">
+                    <div class="subgroup${sgAllDone ? ' all-done' : ''}" data-sg-name="${esc(sgName)}"${sgHidden}>
                         <div class="subgroup-hdr" onclick="toggleSubGroup(this.parentElement)">
                             <svg class="expand-icon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -482,16 +701,17 @@ function renderList() {
                             <span style="flex:1;">${esc(sgName)}</span>
                             <span style="font-size:11px;color:${sgAllDone ? '#22c55e' : '#9ca3af'};font-weight:600;">${sgDone}/${items.length}</span>
                         </div>
-                        <div class="subgroup-body">
-                            ${items.map(c => renderCheckItem(a.id, c)).join('')}
-                        </div>
+                        <div class="subgroup-body">${itemsHtml}</div>
                     </div>`;
             });
         }
 
         // Ungrouped
         const flatItems = ungrouped.length > 0 ? ungrouped : (sgNames.length === 0 ? checklist : []);
-        flatItems.forEach(c => { bodyHtml += renderCheckItem(a.id, c); });
+        flatItems.forEach(c => {
+            if (!showHidden && c.completed == 1) return;
+            bodyHtml += renderCheckItem(a.id, c, false);
+        });
 
         if (!checklist.length) {
             bodyHtml = '<div style="font-size:13px;color:#9ca3af;padding:12px 0;">No checklist items</div>';
@@ -522,9 +742,10 @@ function renderList() {
     });
 }
 
-function renderCheckItem(assignmentId, c) {
+function renderCheckItem(assignmentId, c, hidden) {
+    const hideStyle = hidden ? ' style="display:none;"' : '';
     return `
-        <div class="check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}">
+        <div class="check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}"${hideStyle}>
             <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
                    onchange="toggleCheck(${assignmentId}, ${c.task_id}, this.checked)">
             <span class="check-label">${esc(c.task_name)}</span>
@@ -573,25 +794,69 @@ function toggleCheck(assignmentId, taskId, checked) {
     updateCardCounts(card);
     updateSummary();
 
-    // Auto-expand next subgroup
-    if (checked && item) {
+    // Auto-hide checked item and handle subgroup/card completion
+    if (checked && item && !showHidden) {
+        // Hide the checked item with animation
+        item.style.maxHeight = item.offsetHeight + 'px';
+        requestAnimationFrame(() => { item.classList.add('hiding'); });
+        setTimeout(() => { item.style.display = 'none'; }, 300);
+
         const sg = item.closest('.subgroup');
         if (sg) {
             const sgAll = sg.querySelectorAll('.check-item');
             const sgDone = sg.querySelectorAll('.check-item.done');
-            if (sgAll.length > 0 && sgAll.length === sgDone.length) {
-                // Update subgroup header count color
-                const countSpan = sg.querySelector('.subgroup-hdr span:last-child');
-                if (countSpan) countSpan.style.color = '#22c55e';
+            // Update subgroup header count
+            const countSpan = sg.querySelector('.subgroup-hdr span:last-child');
+            if (countSpan) {
+                countSpan.textContent = `${sgDone.length}/${sgAll.length}`;
+                countSpan.style.color = sgAll.length === sgDone.length ? '#22c55e' : '#9ca3af';
+            }
 
-                // Collapse finished subgroup
+            if (sgAll.length > 0 && sgAll.length === sgDone.length) {
+                // All done in subgroup — hide it, open next
+                setTimeout(() => {
+                    sg.style.display = 'none';
+                    let next = sg.nextElementSibling;
+                    while (next && !next.classList.contains('subgroup')) next = next.nextElementSibling;
+                    if (next && next.style.display !== 'none' && !next.classList.contains('open')) next.classList.add('open');
+                }, 350);
+            }
+        }
+
+        // If all items in card are done, hide the card
+        setTimeout(() => {
+            if (card) {
+                const allItems = card.querySelectorAll('.check-item');
+                const doneItems = card.querySelectorAll('.check-item.done');
+                if (allItems.length > 0 && allItems.length === doneItems.length) {
+                    card.classList.add('hiding');
+                    setTimeout(() => { card.style.display = 'none'; }, 300);
+                }
+            }
+        }, 400);
+    } else if (checked && item) {
+        // showHidden mode — just handle subgroup progression
+        const sg = item.closest('.subgroup');
+        if (sg) {
+            const sgAll = sg.querySelectorAll('.check-item');
+            const sgDone = sg.querySelectorAll('.check-item.done');
+            const countSpan = sg.querySelector('.subgroup-hdr span:last-child');
+            if (countSpan) {
+                countSpan.textContent = `${sgDone.length}/${sgAll.length}`;
+                countSpan.style.color = sgAll.length === sgDone.length ? '#22c55e' : '#9ca3af';
+            }
+            if (sgAll.length > 0 && sgAll.length === sgDone.length) {
                 sg.classList.remove('open');
-                // Open the next sibling subgroup
                 let next = sg.nextElementSibling;
                 while (next && !next.classList.contains('subgroup')) next = next.nextElementSibling;
                 if (next && !next.classList.contains('open')) next.classList.add('open');
             }
         }
+    }
+
+    // If unchecking, re-render to show items properly
+    if (!checked) {
+        setTimeout(() => renderList(), 100);
     }
 
     // Also update local cache

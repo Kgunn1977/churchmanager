@@ -1,17 +1,6 @@
 <?php
 $pageTitle = 'My Tasks — Church Facility Manager';
-$isEmbed = isset($_GET['embed']) && $_GET['embed'] === '1';
-if ($isEmbed) {
-    // Minimal bootstrap for embedded/iframe mode — skip nav bar
-    require_once __DIR__ . '/../includes/auth.php';
-    requireLogin();
-    $currentUser = getCurrentUser();
-    require_once __DIR__ . '/../config/database.php';
-    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My Tasks</title><script src="https://cdn.tailwindcss.com"></script>';
-    echo '<script>const BASE_PATH = ' . json_encode(defined('BASE_PATH') ? BASE_PATH : '') . ';</script></head><body class="bg-gray-100" style="min-height:100vh;">';
-} else {
-    require_once __DIR__ . '/../includes/nav.php';
-}
+require_once __DIR__ . '/../includes/nav.php';
 require_once __DIR__ . '/../config/database.php';
 $db = getDB();
 $user = getCurrentUser();
