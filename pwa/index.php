@@ -189,24 +189,20 @@ html, body {
 /* ═══════════════════════════════════════════════════════════
    APP SHELL
    ═══════════════════════════════════════════════════════════ */
+/* Pin entire app to viewport — nothing outside .task-scroll can ever scroll */
 #app {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     display: flex; flex-direction: column;
-    height: 100vh; height: 100dvh;
     overflow: hidden;
 }
 
-/* ── Top bar (fixed so it can never scroll out of view) ───── */
+/* ── Top bar ──────────────────────────────────────────────── */
 .top-bar {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
     color: #fff; padding: 12px 16px;
     padding-top: max(12px, env(safe-area-inset-top));
     display: flex; align-items: center; justify-content: space-between;
-}
-/* Spacer mirrors the top bar's own sizing: same top padding + content + bottom padding */
-.top-bar-spacer {
     flex-shrink: 0;
-    height: calc(max(12px, env(safe-area-inset-top)) + 12px + 22px);
 }
 .top-bar-title {
     font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
@@ -484,11 +480,6 @@ html, body {
     </style>
 </head>
 <body>
-<script>
-// Prevent browser scroll restoration after form POST (login) — keeps top bar in view
-if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-window.scrollTo(0, 0);
-</script>
 <div id="app">
 
     <!-- Top bar (position:fixed — always visible) -->
@@ -502,7 +493,6 @@ window.scrollTo(0, 0);
             <button class="logout-btn" onclick="doLogout()">Sign Out</button>
         </div>
     </div>
-    <div class="top-bar-spacer"></div>
 
     <!-- Offline banner -->
     <div class="offline-banner" id="offlineBanner">You're offline — changes will sync when reconnected</div>
@@ -555,7 +545,7 @@ window.scrollTo(0, 0);
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <p>No tasks for this day <span style="color:#d1d5db;font-size:10px;">v12</span></p>
+            <p>No tasks for this day <span style="color:#d1d5db;font-size:10px;">v13</span></p>
             <small>Select a different date or check with your supervisor.</small>
         </div>
     </div>
@@ -881,8 +871,8 @@ function cycleView() {
     const labels = ['View', 'Rooms', 'Tasks', 'Resources'];
     const icons = {
         default:   '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>',
-        rooms:     '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v12a1 1 0 001 1h3m10-11l2 2m-2-2v12a1 1 0 01-1 1h-3m-4 0h4"/>',
-        task:      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>',
+        rooms:     '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v13a1 1 0 001 1h3m10-11l2 2m-2-2v13a1 1 0 01-1 1h-3m-4 0h4"/>',
+        task:      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>',
         resources: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>'
     };
     const idx = (modes.indexOf(viewMode) + 1) % modes.length;
@@ -1300,7 +1290,7 @@ function showEmptyState(allDone) {
         empty.querySelector('p').textContent = 'All tasks completed!';
         empty.querySelector('small').textContent = 'Tap "Show Hidden" to review.';
     } else {
-        empty.querySelector('p').innerHTML = 'No tasks for this day <span style="color:#d1d5db;font-size:10px;">v12</span>';
+        empty.querySelector('p').innerHTML = 'No tasks for this day <span style="color:#d1d5db;font-size:10px;">v13</span>';
         empty.querySelector('small').textContent = 'Select a different date or check with your supervisor.';
     }
 }
