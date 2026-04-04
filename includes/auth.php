@@ -10,6 +10,16 @@ function isLoggedIn() {
 
 function requireLogin() {
     if (!isLoggedIn()) {
+        // API requests get JSON 401 instead of redirect
+        $isApi = strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false
+              || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+              || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest');
+        if ($isApi) {
+            http_response_code(401);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Session expired', 'login_required' => true]);
+            exit;
+        }
         header('Location: ' . url('/login.php'));
         exit;
     }

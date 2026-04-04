@@ -11,9 +11,14 @@ if (isset($_GET['logout'])) {
     exit;
 }
 
+// Prevent caching of login page
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 // Already logged in — go to PWA home
 if (isLoggedIn()) {
-    header('Location: ' . url('/pwa/index.php'));
+    header('Location: ' . url('/pwa/index.php') . '?_t=' . time());
     exit;
 }
 
@@ -33,7 +38,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user && password_verify($password, $user['password'])) {
             loginUser($user);
             // Send to install page if they haven't installed yet, otherwise straight to app
+            // Cache-bust query param forces fresh load after sign-in
             $dest = url(isset($_COOKIE['cfm_pwa_seen']) ? '/pwa/index.php' : '/pwa/install.php');
+            $dest .= (strpos($dest, '?') !== false ? '&' : '?') . '_t=' . time();
             header('Location: ' . $dest);
             exit;
         } else {

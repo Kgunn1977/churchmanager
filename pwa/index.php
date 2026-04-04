@@ -7,6 +7,11 @@ if (!isLoggedIn()) {
 }
 $user = getCurrentUser();
 
+// Prevent browser & proxy caching — ensures fresh page after sign-out/sign-in
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 // Load date strip settings
 require_once __DIR__ . '/../config/database.php';
 $_pwaDb = getDB();
@@ -814,8 +819,12 @@ function loadAssignments() {
     }
 
     fetch(BASE_PATH + `/api/tasks_api.php?action=get_janitor_assignments&date=${selectedDate}&user_id=${USER_ID}`)
-        .then(r => r.json())
+        .then(r => {
+            if (r.status === 401) { location.href = BASE_PATH + '/pwa/login.php'; return Promise.reject('auth'); }
+            return r.json();
+        })
         .then(data => {
+            if (!data) return;
             assignments = data;
             renderSummary();
             renderList();
@@ -1509,6 +1518,23 @@ function esc(s) {
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
+// Freshness check: if this page was served from SW cache, verify session is still valid
+// by making a lightweight fetch. If session expired, redirect to login.
+if (navigator.onLine) {
+    fetch(BASE_PATH + '/api/tasks_api.php?action=get_task_types', { credentials: 'same-origin' })
+        .then(r => {
+            if (r.status === 401 || r.redirected) {
+                location.href = BASE_PATH + '/pwa/login.php';
+            }
+        })
+        .catch(() => {});
+}
+
+// Force SW update check on every page load
+if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then(reg => reg.update());
+}
+
 updateOnlineStatus();
 renderDateStrip();
 loadAssignments();
