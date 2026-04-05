@@ -365,9 +365,13 @@ html, body {
     width: 22px; height: 22px; accent-color: #2563eb;
     cursor: pointer; flex-shrink: 0;
 }
-.check-label { font-size: 14px; color: #374151; flex: 1; cursor: pointer; -webkit-tap-highlight-color: rgba(59,130,246,.15); }
+.check-label { font-size: 14px; font-weight: 700; color: #374151; flex: 1; cursor: pointer; -webkit-tap-highlight-color: rgba(59,130,246,.15); }
 .check-item.done .check-label {
     text-decoration: line-through; color: #9ca3af;
+}
+.check-time {
+    font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+    background: #f3f4f6; color: #6b7280; flex-shrink: 0;
 }
 
 /* ── Empty state ──────────────────────────────────────────── */
@@ -965,17 +969,10 @@ function renderFloorMapSVG(wrap, rooms, highlightRoomId) {
         return;
     }
 
-    // If the highlighted room is virtual (H-link or V-link), highlight its member rooms instead
     let highlightIds = new Set();
-    const highlightRoom = rooms.find(r => r.id == highlightRoomId);
-    if (highlightRoom && highlightRoom.is_virtual && highlightRoom.linked_member_room_ids && highlightRoom.linked_member_room_ids.length) {
-        highlightRoom.linked_member_room_ids.forEach(id => highlightIds.add(id));
-    } else {
-        highlightIds.add(Number(highlightRoomId));
-    }
+    highlightIds.add(Number(highlightRoomId));
 
-    // Skip virtual rooms from rendering (their polygons are convex hull approximations)
-    const visible = mapped.filter(r => !r.is_virtual);
+    const visible = mapped;
 
     // Calculate bounding box across all visible rooms
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1547,11 +1544,13 @@ function renderCheckItem(assignmentId, c, hidden) {
     const hideStyle = hidden ? ' style="display:none;"' : '';
     // Store task detail for popup — composite key to handle same task in multiple rooms
     taskDetailCache[assignmentId + '_' + c.task_id] = c;
+    const timeHtml = (SCHED_MODE !== 'none' && c.task_minutes) ? `<span class="check-time">${c.task_minutes} min</span>` : '';
     return `
         <div class="check-item${c.completed == 1 ? ' done' : ''}" data-task-id="${c.task_id}" data-assignment-id="${assignmentId}"${hideStyle}>
             <input type="checkbox" ${c.completed == 1 ? 'checked' : ''}
                    onchange="toggleCheck(${assignmentId}, ${c.task_id}, this.checked)">
             <span class="check-label" onclick="openTaskDetail(${assignmentId}, ${c.task_id})">${esc(c.task_name)}</span>
+            ${timeHtml}
         </div>`;
 }
 

@@ -71,7 +71,6 @@ ob_start(); ?>
     .room-poly.hlink-member { fill: rgba(168,85,247,0.13); stroke: #7c3aed; }
     .room-poly.hlink-member:hover { fill: rgba(168,85,247,0.24); }
     .room-poly.hlink-member.selected { fill: rgba(168,85,247,0.32); stroke: #6d28d9; stroke-width: 0.7; }
-    .room-poly.virtual { display: none; } /* virtual combo rooms hidden on canvas */
     .hlink-divider { stroke: #7c3aed; stroke-width: 1.5; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; pointer-events: none; }
     #floor-svg.move-mode .room-poly { cursor: move; }
     #floor-svg.pan-mode .room-poly { cursor: grab; }
@@ -160,9 +159,8 @@ $fp_buildings = $buildings;
     </button>
     <button id="btn-pan" onclick="setMode('pan')" title="Pan mode">✋ Pan</button>
     <div class="tb-sep"></div>
-    <button id="btn-link"   disabled onclick="doLink()"   title="V-Link: combine rooms across floors into one virtual room" style="background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.5);">⛓ V-Link</button>
-    <button id="btn-hlink"  disabled onclick="doHLink()"  title="H-Link: combine same-floor rooms with removable partitions" style="background:rgba(168,85,247,0.2);border-color:rgba(168,85,247,0.5);">🔗 H-Link</button>
-    <button id="btn-unlink" disabled onclick="doUnlink()" title="Unlink selected rooms" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4);">✂ Unlink</button>
+    <button id="btn-link"   disabled onclick="doLink()"   title="Link selected rooms into a bookable group" style="background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.5);">🔗 Link</button>
+    <button id="btn-unlink" disabled onclick="doUnlink()" title="Remove link group for selected room" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4);">✂ Unlink</button>
     <div class="tb-sep"></div>
     <button id="btn-copy" disabled onclick="doCopy()" title="Copy selected room">📋 Copy</button>
     <button id="btn-paste" disabled onclick="doPaste()" title="Paste room onto current floor">📌 Paste</button>
@@ -170,50 +168,19 @@ $fp_buildings = $buildings;
     <span id="floor-label" style="font-size:12px;color:rgba(255,255,255,0.6);font-style:italic;"></span>
 </div>
 
-<!-- Link-name modal -->
+
+<!-- Link modal -->
 <div id="link-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;align-items:center;justify-content:center;">
     <div style="background:white;border-radius:16px;padding:28px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);font-family:ui-sans-serif,system-ui,sans-serif;">
-        <h3 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">V-Link Rooms</h3>
+        <h3 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">🔗 Link Rooms</h3>
         <p id="link-modal-desc" style="font-size:12px;color:#6b7280;margin:0 0 16px;"></p>
-        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:4px;">Shared Room Name</label>
-        <input id="link-name-input" type="text" placeholder="e.g. Main Sanctuary"
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:4px;">Link Name</label>
+        <input id="link-name-input" type="text" placeholder="e.g. Fellowship Hall"
                style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:14px;margin-bottom:16px;outline:none;color:#111827;box-sizing:border-box;"
                onkeydown="if(event.key==='Enter')confirmLink()">
         <div style="display:flex;gap:8px;">
-            <button onclick="confirmLink()" style="flex:1;padding:9px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">V-Link Rooms</button>
+            <button onclick="confirmLink()" style="flex:1;padding:9px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Link Rooms</button>
             <button onclick="closeLinkModal()" style="flex:1;padding:9px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>
-        </div>
-    </div>
-</div>
-
-<!-- H-Link modal -->
-<div id="hlink-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;align-items:center;justify-content:center;">
-    <div style="background:white;border-radius:16px;padding:28px;width:420px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);font-family:ui-sans-serif,system-ui,sans-serif;">
-        <h3 style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">🔗 H-Link Rooms</h3>
-        <p id="hlink-modal-desc" style="font-size:12px;color:#6b7280;margin:0 0 16px;"></p>
-
-        <!-- Step 1: Group name (only shown when creating new group) -->
-        <div id="hlink-step-group">
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:4px;">Group Name</label>
-            <input id="hlink-group-name" type="text" placeholder="e.g. Fellowship Hall"
-                   style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:14px;margin-bottom:12px;outline:none;color:#111827;box-sizing:border-box;">
-        </div>
-
-        <!-- Step 2: Combination name -->
-        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:4px;">Combination Name</label>
-        <input id="hlink-combo-name" type="text" placeholder="e.g. Full Room"
-               style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:14px;margin-bottom:12px;outline:none;color:#111827;box-sizing:border-box;">
-        <p style="font-size:11px;color:#9ca3af;margin:0 0 16px;">This creates a bookable virtual room combining the selected rooms.</p>
-
-        <!-- Existing combos for this group (when adding to existing group) -->
-        <div id="hlink-existing-combos" style="display:none;margin-bottom:16px;">
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:6px;">Existing Combinations</label>
-            <div id="hlink-combos-list" style="font-size:12px;color:#374151;"></div>
-        </div>
-
-        <div style="display:flex;gap:8px;">
-            <button onclick="confirmHLink()" style="flex:1;padding:9px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Create Combination</button>
-            <button onclick="closeHLinkModal()" style="flex:1;padding:9px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>
         </div>
     </div>
 </div>
@@ -1009,18 +976,6 @@ function updateRoomPane() {
     }
     const rooms=ids.map(id=>state.rooms.find(r=>r.id===id)).filter(Boolean);
 
-    // ── Detect V-Link group ──
-    let linkGroup = null;
-    if (ids.length === 1) {
-        linkGroup = linkedGroups.find(g => g.room_ids.includes(ids[0]) || g.virtual_room_id === ids[0]);
-    }
-
-    // ── Detect H-Link group ──
-    let hlinkGroup = null;
-    if (ids.length >= 1) {
-        hlinkGroup = hLinkGroupFor(ids[0]);
-    }
-
     const fName=getFieldValue(rooms,'name');
     const fAbbr=getFieldValue(rooms,'abbreviation');
     const fCap =getFieldValue(rooms,'capacity');
@@ -1028,20 +983,7 @@ function updateRoomPane() {
     const fSto =getFieldValue(rooms,'is_storage');
 
     let title, subtitle;
-    if (linkGroup) {
-        title    = escHtml(linkGroup.name);
-        subtitle = `V-Linked Room · ${linkGroup.room_ids.length} floors`;
-    } else if (hlinkGroup && ids.length >= 2) {
-        // Check if selected rooms match a combo
-        const matchedCombo = hlinkGroup.combinations.find(c =>
-            c.room_ids.length === ids.length && c.room_ids.every(id => ids.includes(id))
-        );
-        title    = matchedCombo ? escHtml(matchedCombo.name) : escHtml(hlinkGroup.name);
-        subtitle = `H-Linked · ${ids.length} rooms` + (matchedCombo ? ` · ${matchedCombo.name}` : '');
-    } else if (hlinkGroup && ids.length === 1) {
-        title    = escHtml(rooms[0].name);
-        subtitle = `H-Link group: ${escHtml(hlinkGroup.name)} · ${hlinkGroup.combinations.length} combination(s)`;
-    } else if (ids.length === 1) {
+    if (ids.length === 1) {
         title    = escHtml(rooms[0].name);
         subtitle = 'Room';
     } else {
@@ -1113,16 +1055,9 @@ async function saveParam(field, value, multipleAttr) {
     if (wasMultiple && value === '') return; // nothing changed
     if (field === 'name' && !value) return;
 
-    // Build the list of room IDs to update.
-    // If a selected room is part of a V-Link group, save to ALL rooms in that group.
     const selectedIds = [...state.selectedRoomIds];
-    const allIds = new Set(selectedIds);
-    for (const id of selectedIds) {
-        const group = linkedGroups.find(g => g.room_ids.includes(id) || g.virtual_room_id === id);
-        if (group) group.room_ids.forEach(rid => allIds.add(rid));
-    }
 
-    for (const id of allIds) {
+    for (const id of selectedIds) {
         // Update local state if the room is on this floor
         const room = state.rooms.find(r => r.id === id);
         if (room) {
@@ -1151,10 +1086,8 @@ async function saveParam(field, value, multipleAttr) {
 setViewBox(0, 0, 80, 60);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ROOM PICKER + V-LINK / UNLINK
+// ROOM PICKER
 // ─────────────────────────────────────────────────────────────────────────────
-
-let linkedGroups = [];   // [{id, name, building_id, virtual_room_id, room_ids:[…]}]
 
 // Initialise the room-picker module
 const facPicker = new FloorPlanPicker({
@@ -1162,53 +1095,49 @@ const facPicker = new FloorPlanPicker({
     dividerId   : 'fac-fp-divider',
     dividerKey  : 'fp_w_fac',
     defaultWidth: 340,
-    onChange    : () => updateAllLinkButtons(),
+    onChange    : () => updateLinkButtons(),
     onRoomClick : (room, floor) => selectFloor(floor),
 });
 
-/** Master wrapper — always called by picker onChange; delegates to V-Link + H-Link checks. */
-function updateAllLinkButtons() {
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOM LINKS
+// ─────────────────────────────────────────────────────────────────────────────
+
+let roomLinks = []; // [{id, name, room_ids:[], members:[], total_capacity}]
+
+async function loadRoomLinks() {
+    try {
+        const res = await fetch(BASE_PATH + '/api/links_api.php?action=get_links');
+        roomLinks = await res.json();
+    } catch(e) { roomLinks = []; }
+    facPicker.setLinkGroups(roomLinks);
     updateLinkButtons();
-    if (typeof updateHLinkButton === 'function') updateHLinkButton();
 }
+loadRoomLinks();
 
-async function loadLinkedGroups() {
-    const res = await fetch(BASE_PATH + '/api/room_links_api.php?action=get_links');
-    linkedGroups = await res.json();
-    facPicker.setLinkedGroups(linkedGroups);
-    updateAllLinkButtons();
-}
-loadLinkedGroups();
-
-/** Enable/disable V-Link and Unlink buttons based on current picker selection. */
+/** Enable/disable Link and Unlink buttons based on picker selection. */
 function updateLinkButtons() {
-    const sel     = facPicker.getSelection();
-    const ids     = Object.keys(sel).map(Number);
-    const btnLink = document.getElementById('btn-link');
+    const sel = facPicker.getSelection();
+    const ids = Object.keys(sel).map(Number);
+    const btnLink   = document.getElementById('btn-link');
     const btnUnlink = document.getElementById('btn-unlink');
 
-    // V-Link: need 2+ rooms, all from the same building, on DIFFERENT floors, none already linked
-    const buildings = [...new Set(Object.values(sel).map(r => r.building))];
-    const floors    = [...new Set(Object.values(sel).map(r => r.floor))];
-    const anyVLinked = ids.some(id => linkedGroups.some(g => g.room_ids.includes(id) || g.virtual_room_id === id));
-    const anyHLinked = typeof hLinkGroupFor === 'function' && ids.some(id => hLinkGroupFor(id));
-    const canLink   = ids.length >= 2 && buildings.length === 1 && floors.length > 1 && !anyVLinked && !anyHLinked;
+    // Link: need 2+ rooms selected
+    btnLink.disabled = ids.length < 2;
 
-    // Unlink: at least one selected room is in a V-linked or H-linked group
-    const canUnlink = (anyVLinked || anyHLinked) && ids.length > 0;
-
-    btnLink.disabled   = !canLink;
-    btnUnlink.disabled = !canUnlink;
+    // Unlink: at least one selected room belongs to a link group
+    const anyLinked = ids.some(id => roomLinks.some(g => g.room_ids.includes(id)));
+    btnUnlink.disabled = !anyLinked || ids.length === 0;
 }
 
-// ── V-Link flow ──────────────────────────────────────────
+// ── Link flow ────────────────────────────────────────────
 
 function doLink() {
-    const sel  = facPicker.getSelection();
-    const ids  = Object.keys(sel).map(Number);
+    const sel   = facPicker.getSelection();
+    const ids   = Object.keys(sel).map(Number);
     const names = ids.map(id => sel[id]?.name || `Room ${id}`).join(', ');
-    document.getElementById('link-modal-desc').textContent =
-        `Rooms to V-Link: ${names}`;
+
+    document.getElementById('link-modal-desc').textContent = `Rooms: ${names}`;
     document.getElementById('link-name-input').value = '';
     document.getElementById('link-modal-overlay').style.display = 'flex';
     setTimeout(() => document.getElementById('link-name-input').focus(), 50);
@@ -1222,30 +1151,21 @@ async function confirmLink() {
     const name = document.getElementById('link-name-input').value.trim();
     if (!name) { document.getElementById('link-name-input').focus(); return; }
 
-    const sel        = facPicker.getSelection();
-    const ids        = Object.keys(sel).map(Number);
-
-    // Get building_id from the picker's internal floor data
-    const bldId = facPicker._floors
-        .flatMap(f => f.rooms.map(r => ({ roomId: r.id, bldId: f.building_id })))
-        .find(x => ids.includes(x.roomId))?.bldId;
-
-    if (!bldId) { alert('Could not determine building for selected rooms.'); return; }
+    const sel = facPicker.getSelection();
+    const ids = Object.keys(sel).map(Number);
 
     const body = new FormData();
-    body.append('action',      'create_link');
-    body.append('name',        name);
-    body.append('building_id', bldId);
-    body.append('room_ids',    JSON.stringify(ids));
+    body.append('action',   'create_link');
+    body.append('name',     name);
+    body.append('room_ids', JSON.stringify(ids));
 
-    const res  = await fetch(BASE_PATH + '/api/room_links_api.php', { method: 'POST', body });
+    const res  = await fetch(BASE_PATH + '/api/links_api.php', { method: 'POST', body });
     const data = await res.json();
     if (data.error) { alert('Error: ' + data.error); return; }
 
     closeLinkModal();
-    // Refresh: reload floors (names changed) + linked groups
-    await loadLinkedGroups();
-    facPicker.load();       // re-fetch rooms (names updated server-side)
+    await loadRoomLinks();
+    setStatus(`Link "${name}" created`);
 }
 
 // ── Unlink flow ──────────────────────────────────────────
@@ -1254,52 +1174,24 @@ async function doUnlink() {
     const sel = facPicker.getSelection();
     const ids = Object.keys(sel).map(Number);
 
-    // Find which V-Link group(s) are affected (check both member rooms and virtual room)
-    const affectedVLinkIds = [...new Set(
-        ids.flatMap(id => linkedGroups.filter(g => g.room_ids.includes(id) || g.virtual_room_id === id).map(g => g.id))
-    )];
+    // Find all link groups that contain any of the selected rooms
+    const affectedLinks = roomLinks.filter(g => ids.some(id => g.room_ids.includes(id)));
+    if (!affectedLinks.length) return;
 
-    // Find which H-Link group(s) are affected
-    const affectedHLinkIds = [...new Set(
-        ids.flatMap(id => {
-            if (typeof hLinkGroupFor !== 'function') return [];
-            const hg = hLinkGroupFor(id);
-            return hg ? [hg.id] : [];
-        })
-    )];
-
-    if (!affectedVLinkIds.length && !affectedHLinkIds.length) return;
-
-    const totalGroups = affectedVLinkIds.length + affectedHLinkIds.length;
-    const confirmed = confirm(
-        `Unlink ${totalGroups} group(s)? V-Link rooms will be restored to their original names.`
-    );
+    const names = affectedLinks.map(g => g.name).join(', ');
+    const confirmed = confirm(`Remove link group${affectedLinks.length > 1 ? 's' : ''}: ${names}?`);
     if (!confirmed) return;
 
-    // Delete V-Link groups
-    for (const linkId of affectedVLinkIds) {
+    for (const link of affectedLinks) {
         const body = new FormData();
         body.append('action',  'delete_link');
-        body.append('link_id', linkId);
-        const res  = await fetch(BASE_PATH + '/api/room_links_api.php', { method: 'POST', body });
-        const data = await res.json();
-        if (data.error) { alert('Error: ' + data.error); return; }
-    }
-
-    // Delete H-Link groups
-    for (const groupId of affectedHLinkIds) {
-        const body = new FormData();
-        body.append('action',  'delete_group');
-        body.append('group_id', groupId);
-        const res  = await fetch(BASE_PATH + '/api/h_link_api.php', { method: 'POST', body });
-        const data = await res.json();
-        if (data.error) { alert('Error: ' + data.error); return; }
+        body.append('link_id', link.id);
+        await fetch(BASE_PATH + '/api/links_api.php', { method: 'POST', body });
     }
 
     facPicker.clearSelection();
-    await loadLinkedGroups();
-    if (typeof loadHLinkGroups === 'function') await loadHLinkGroups();
-    facPicker.load();
+    await loadRoomLinks();
+    setStatus(`Unlinked ${affectedLinks.length} group(s)`);
 }
 
 // Close link modal on backdrop click
@@ -1307,598 +1199,6 @@ document.getElementById('link-modal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('link-modal-overlay')) closeLinkModal();
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// H-LINK (Horizontal Link — combinable partition rooms)
-// ─────────────────────────────────────────────────────────────────────────────
-
-let hLinkGroups = [];   // [{id, name, floor_id, room_ids:[], combinations:[{id, name, virtual_room_id, room_ids:[]}]}]
-let _hLinkPendingGroupId = null; // when adding combo to existing group
-
-const H_LINK_API = BASE_PATH + '/api/h_link_api.php';
-
-async function loadHLinkGroups() {
-    try {
-        const res = await fetch(H_LINK_API + '?action=get_groups');
-        hLinkGroups = await res.json();
-    } catch(e) { hLinkGroups = []; }
-    facPicker.setHLinkGroups(hLinkGroups);
-    updateAllLinkButtons();
-}
-loadHLinkGroups();
-
-/** Get the H-Link group that contains a room (by real room id) */
-function hLinkGroupFor(roomId) {
-    return hLinkGroups.find(g => g.room_ids.includes(Number(roomId))) || null;
-}
-
-/** Get all H-Link combinations that include a room (by real room id) */
-function hLinkCombosFor(roomId) {
-    const rid = Number(roomId);
-    const combos = [];
-    for (const g of hLinkGroups) {
-        for (const c of g.combinations) {
-            if (c.room_ids.includes(rid)) combos.push(c);
-        }
-    }
-    // Sort: largest first, then alphabetical
-    combos.sort((a, b) => {
-        if (b.room_ids.length !== a.room_ids.length) return b.room_ids.length - a.room_ids.length;
-        return a.name.localeCompare(b.name);
-    });
-    return combos;
-}
-
-/** Check if a room is a virtual combo room */
-function isVirtualRoom(room) {
-    return room.is_virtual == 1;
-}
-
-// ── H-Link button enable/disable ──
-function updateHLinkButton() {
-    const sel = facPicker.getSelection();
-    const ids = Object.keys(sel).map(Number);
-    const btnHLink = document.getElementById('btn-hlink');
-
-    if (ids.length < 2) { btnHLink.disabled = true; return; }
-
-    // All selected rooms must be on the same floor
-    const floors = [...new Set(Object.values(sel).map(r => r.floor))];
-    if (floors.length !== 1) { btnHLink.disabled = true; return; }
-
-    // None should be V-Linked
-    const anyVLinked = ids.some(id => linkedGroups.some(g => g.room_ids.includes(id) || g.virtual_room_id === id));
-    if (anyVLinked) { btnHLink.disabled = true; return; }
-
-    // None should be virtual rooms
-    const anyVirtual = ids.some(id => {
-        for (const f of facPicker._floors) {
-            const r = f.rooms.find(rm => rm.id === id);
-            if (r) return r.is_virtual == 1;
-        }
-        return false;
-    });
-    if (anyVirtual) { btnHLink.disabled = true; return; }
-
-    btnHLink.disabled = false;
-}
-
-// ── H-Link modal flow ──
-
-function doHLink() {
-    const sel = facPicker.getSelection();
-    const ids = Object.keys(sel).map(Number).filter(id => state.rooms.some(r => r.id === id && !isVirtualRoom(r)));
-    if (ids.length < 2) return;
-
-    const names = ids.map(id => {
-        const r = state.rooms.find(r2 => r2.id === id);
-        return r ? r.name : `Room ${id}`;
-    }).join(', ');
-
-    document.getElementById('hlink-modal-desc').textContent = `Rooms: ${names}`;
-
-    // Check if any of these rooms already belong to an H-Link group
-    const existingGroup = hLinkGroups.find(g => ids.some(id => g.room_ids.includes(id)));
-
-    if (existingGroup) {
-        // Adding a combo to existing group
-        _hLinkPendingGroupId = existingGroup.id;
-        document.getElementById('hlink-step-group').style.display = 'none';
-
-        // Show existing combos
-        const combosDiv = document.getElementById('hlink-combos-list');
-        combosDiv.innerHTML = '';
-        if (existingGroup.combinations.length) {
-            existingGroup.combinations.forEach(c => {
-                const memberNames = c.room_ids.map(rid => {
-                    const r = state.rooms.find(r2 => r2.id === rid);
-                    return r ? r.name : `#${rid}`;
-                }).join(' + ');
-                combosDiv.innerHTML += `<div style="padding:4px 8px;background:#f3f4f6;border-radius:6px;margin-bottom:4px;">
-                    <strong>${escHtml(c.name)}</strong>
-                    <span style="color:#9ca3af;margin-left:6px;">${memberNames}</span>
-                </div>`;
-            });
-            document.getElementById('hlink-existing-combos').style.display = 'block';
-        } else {
-            document.getElementById('hlink-existing-combos').style.display = 'none';
-        }
-    } else {
-        // New group
-        _hLinkPendingGroupId = null;
-        document.getElementById('hlink-step-group').style.display = 'block';
-        document.getElementById('hlink-group-name').value = '';
-        document.getElementById('hlink-existing-combos').style.display = 'none';
-    }
-
-    document.getElementById('hlink-combo-name').value = '';
-    document.getElementById('hlink-modal-overlay').style.display = 'flex';
-    setTimeout(() => {
-        const first = _hLinkPendingGroupId
-            ? document.getElementById('hlink-combo-name')
-            : document.getElementById('hlink-group-name');
-        first.focus();
-    }, 50);
-}
-
-function closeHLinkModal() {
-    document.getElementById('hlink-modal-overlay').style.display = 'none';
-    _hLinkPendingGroupId = null;
-}
-
-async function confirmHLink() {
-    const sel = facPicker.getSelection();
-    const ids = Object.keys(sel).map(Number).filter(id => state.rooms.some(r => r.id === id && !isVirtualRoom(r)));
-    const comboName = document.getElementById('hlink-combo-name').value.trim();
-    if (!comboName) { document.getElementById('hlink-combo-name').focus(); return; }
-
-    let groupId = _hLinkPendingGroupId;
-
-    // If creating new group first
-    if (!groupId) {
-        const groupName = document.getElementById('hlink-group-name').value.trim();
-        if (!groupName) { document.getElementById('hlink-group-name').focus(); return; }
-
-        const res = await fetch(H_LINK_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'create_group',
-                name: groupName,
-                floor_id: state.floorId,
-                room_ids: ids,
-            })
-        });
-        const data = await res.json();
-        if (data.error) { alert('Error: ' + data.error); return; }
-        groupId = data.group_id;
-    }
-
-    // Now add the combination
-    const res2 = await fetch(H_LINK_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            action: 'add_combination',
-            group_id: groupId,
-            name: comboName,
-            room_ids: ids,
-        })
-    });
-    const data2 = await res2.json();
-    if (data2.error) { alert('Error: ' + data2.error); return; }
-
-    closeHLinkModal();
-    await loadHLinkGroups();
-    await loadRooms();
-    facPicker.load();
-    setStatus(`H-Link combination "${comboName}" created`);
-}
-
-// ── Unlink: handle both V-Link and H-Link ──
-// Replace the original doUnlink with one that handles both types
-const _origDoUnlink = doUnlink;
-doUnlink = async function() {
-    const sel = facPicker.getSelection();
-    const ids = Object.keys(sel).map(Number);
-
-    // Check V-Links
-    const vLinkIds = [...new Set(
-        ids.flatMap(id => linkedGroups.filter(g => g.room_ids.includes(id) || g.virtual_room_id === id).map(g => g.id))
-    )];
-
-    // Check H-Links
-    const hLinkGroupIds = [...new Set(
-        ids.map(id => hLinkGroupFor(id)).filter(Boolean).map(g => g.id)
-    )];
-
-    if (vLinkIds.length) {
-        const confirmed = confirm(`Unlink ${vLinkIds.length} V-Link group(s)? Rooms will be restored to their original names.`);
-        if (!confirmed) return;
-        for (const linkId of vLinkIds) {
-            const body = new FormData();
-            body.append('action', 'delete_link');
-            body.append('link_id', linkId);
-            await fetch(BASE_PATH + '/api/room_links_api.php', { method: 'POST', body });
-        }
-        facPicker.clearSelection();
-        await loadLinkedGroups();
-        facPicker.load();
-    }
-
-    if (hLinkGroupIds.length) {
-        const confirmed = confirm(`Remove ${hLinkGroupIds.length} H-Link group(s) and all their combinations? Virtual rooms will be deleted.`);
-        if (!confirmed) return;
-        for (const gid of hLinkGroupIds) {
-            await fetch(H_LINK_API, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'delete_group', group_id: gid })
-            });
-        }
-        facPicker.clearSelection();
-        await loadHLinkGroups();
-        await loadRooms();
-        facPicker.load();
-    }
-};
-
-// ── Dashed divider rendering for H-Linked rooms ──
-// Finds shared edges between H-Linked rooms and draws dashed lines
-function renderHLinkDividers() {
-    // Remove existing dividers
-    document.querySelectorAll('.hlink-divider').forEach(el => el.remove());
-
-    for (const g of hLinkGroups) {
-        if (g.floor_id !== state.floorId) continue;
-        const memberRooms = g.room_ids.map(id => state.rooms.find(r => r.id === id)).filter(Boolean);
-
-        // Find shared edges between room pairs
-        for (let i = 0; i < memberRooms.length; i++) {
-            for (let j = i + 1; j < memberRooms.length; j++) {
-                const shared = findSharedEdges(memberRooms[i], memberRooms[j]);
-                for (const [p1, p2] of shared) {
-                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                    line.setAttribute('x1', p1[0]); line.setAttribute('y1', p1[1]);
-                    line.setAttribute('x2', p2[0]); line.setAttribute('y2', p2[1]);
-                    line.setAttribute('class', 'hlink-divider');
-                    roomsL.appendChild(line);
-                }
-            }
-        }
-    }
-}
-
-/** Find shared/overlapping edges between two rooms */
-function findSharedEdges(roomA, roomB) {
-    if (!roomA.map_points || !roomB.map_points) return [];
-    const shared = [];
-    const EPSILON = 1.5; // tolerance in feet
-
-    const edgesA = _getEdges(roomA.map_points);
-    const edgesB = _getEdges(roomB.map_points);
-
-    for (const [a1, a2] of edgesA) {
-        for (const [b1, b2] of edgesB) {
-            const overlap = _edgeOverlap(a1, a2, b1, b2, EPSILON);
-            if (overlap) shared.push(overlap);
-        }
-    }
-    return shared;
-}
-
-function _getEdges(pts) {
-    const edges = [];
-    for (let i = 0; i < pts.length; i++) {
-        edges.push([pts[i], pts[(i + 1) % pts.length]]);
-    }
-    return edges;
-}
-
-/** Check if two edges overlap (are collinear and share a segment) */
-function _edgeOverlap([a1, a2], [b1, b2], eps) {
-    // Check if edges are collinear (both endpoints of one edge are within eps of the other edge's line)
-    const distToSeg = (p, s1, s2) => {
-        const dx = s2[0]-s1[0], dy = s2[1]-s1[1];
-        const len2 = dx*dx + dy*dy;
-        if (len2 === 0) return Math.sqrt((p[0]-s1[0])**2 + (p[1]-s1[1])**2);
-        const t = Math.max(0, Math.min(1, ((p[0]-s1[0])*dx + (p[1]-s1[1])*dy) / len2));
-        const proj = [s1[0] + t*dx, s1[1] + t*dy];
-        return Math.sqrt((p[0]-proj[0])**2 + (p[1]-proj[1])**2);
-    };
-
-    const distToLine = (p, s1, s2) => {
-        const dx = s2[0]-s1[0], dy = s2[1]-s1[1];
-        const len = Math.sqrt(dx*dx + dy*dy);
-        if (len === 0) return Math.sqrt((p[0]-s1[0])**2 + (p[1]-s1[1])**2);
-        return Math.abs((p[0]-s1[0])*dy - (p[1]-s1[1])*dx) / len;
-    };
-
-    // All 4 points must be close to each other's line
-    if (distToLine(b1, a1, a2) > eps || distToLine(b2, a1, a2) > eps) return null;
-    if (distToLine(a1, b1, b2) > eps || distToLine(a2, b1, b2) > eps) return null;
-
-    // Project all 4 points onto the line defined by a1→a2
-    const dx = a2[0]-a1[0], dy = a2[1]-a1[1];
-    const len2 = dx*dx + dy*dy;
-    if (len2 === 0) return null;
-
-    const proj = p => ((p[0]-a1[0])*dx + (p[1]-a1[1])*dy) / len2;
-    const tA1 = 0, tA2 = 1;
-    const tB1 = proj(b1), tB2 = proj(b2);
-
-    const minA = Math.min(tA1, tA2), maxA = Math.max(tA1, tA2);
-    const minB = Math.min(tB1, tB2), maxB = Math.max(tB1, tB2);
-
-    const overlapStart = Math.max(minA, minB);
-    const overlapEnd   = Math.min(maxA, maxB);
-
-    if (overlapEnd - overlapStart < 0.01) return null; // no meaningful overlap
-
-    const len = Math.sqrt(len2);
-    const p1 = [a1[0] + overlapStart * dx, a1[1] + overlapStart * dy];
-    const p2 = [a1[0] + overlapEnd   * dx, a1[1] + overlapEnd   * dy];
-    return [p1, p2];
-}
-
-// ── Override render to also handle V-Link + H-Link styling + dividers ──
-const _origRender = render;
-render = function() {
-    _origRender();
-    // V-Link: highlight member rooms when virtual room is selected, hide virtual rooms
-    for (const g of linkedGroups) {
-        if (g.virtual_room_id) {
-            // Hide virtual room polygon on canvas
-            const vPoly = roomsL.querySelector(`polygon[data-room-id="${g.virtual_room_id}"]`);
-            if (vPoly) vPoly.closest('g').style.display = 'none';
-
-            // If virtual room is selected, highlight all member room polygons
-            if (state.selectedRoomIds.has(g.virtual_room_id)) {
-                for (const rid of g.room_ids) {
-                    const poly = roomsL.querySelector(`polygon[data-room-id="${rid}"]`);
-                    if (poly) poly.classList.add('selected');
-                }
-            }
-        }
-    }
-    // Add H-Link styling classes to member rooms
-    for (const g of hLinkGroups) {
-        if (g.floor_id !== state.floorId) continue;
-        // Find which combo (if any) has its virtual_room_id selected
-        let activeCombo = null;
-        for (const c of g.combinations) {
-            if (c.virtual_room_id && state.selectedRoomIds.has(c.virtual_room_id)) {
-                activeCombo = c;
-                break;
-            }
-        }
-        for (const rid of g.room_ids) {
-            const poly = roomsL.querySelector(`polygon[data-room-id="${rid}"]`);
-            if (poly) {
-                poly.classList.add('hlink-member');
-                // If this room is part of the active combo, show it as selected
-                if (activeCombo && activeCombo.room_ids.includes(rid)) {
-                    poly.classList.add('selected');
-                }
-            }
-        }
-        // Hide virtual combo rooms on the canvas
-        for (const c of g.combinations) {
-            if (c.virtual_room_id) {
-                const poly = roomsL.querySelector(`polygon[data-room-id="${c.virtual_room_id}"]`);
-                if (poly) poly.closest('g').style.display = 'none';
-            }
-        }
-    }
-    renderHLinkDividers();
-};
-
-// ── Click-cycle for H-Linked rooms ──
-// When clicking an H-Linked room in select mode, cycle through combos
-let _hLinkCycleState = {}; // { roomId: currentComboIndex }  (-1 = individual room, null = deselected)
-
-const _origRenderRoom = renderRoom;
-renderRoom = function(room) {
-    // Call original rendering
-    _origRenderRoom(room);
-
-    // If this is a virtual combo room, re-tag it
-    if (isVirtualRoom(room)) {
-        const poly = roomsL.querySelector(`polygon[data-room-id="${room.id}"]`);
-        if (poly) poly.classList.add('virtual');
-    }
-};
-
-// Intercept room click for H-Link cycle behavior
-const _origRoomMouseDown = null; // We'll modify the renderRoom to attach cycle handler
-
-// We need to modify the select-mode click handler for H-Linked rooms.
-// Since renderRoom attaches mousedown directly, we'll override the poly click
-// by hooking into the existing renderRoom. Let's add a post-render hook.
-
-const _origRender2 = render;
-render = function() {
-    _origRender2();
-    attachVLinkHandlers();
-    attachHLinkCycleHandlers();
-};
-
-/** Replace mousedown on V-Linked rooms so clicking toggles the virtual room (no individual selection). */
-function attachVLinkHandlers() {
-    for (const g of linkedGroups) {
-        if (!g.virtual_room_id) continue;
-        for (const rid of g.room_ids) {
-            const poly = roomsL.querySelector(`polygon[data-room-id="${rid}"]`);
-            if (!poly) continue;
-            const parentG = poly.closest('g');
-
-            // Clone to remove existing listeners
-            const newG = parentG.cloneNode(true);
-            parentG.parentNode.replaceChild(newG, parentG);
-
-            const newPoly = newG.querySelector('polygon');
-            newPoly.addEventListener('mousedown', e => {
-                if (e.button !== 0 || state.mode !== 'select') {
-                    e.stopPropagation();
-                    return;
-                }
-                e.stopPropagation();
-
-                // Toggle the virtual room
-                const vrId = g.virtual_room_id;
-                if (state.selectedRoomIds.has(vrId)) {
-                    state.selectedRoomIds.delete(vrId);
-                    // Also clear any member rooms that might be in the set
-                    g.room_ids.forEach(id => state.selectedRoomIds.delete(id));
-                    setStatus('Deselected');
-                } else {
-                    state.selectedRoomIds.add(vrId);
-                    setStatus(`V-Link: ${g.name}`);
-                }
-                updateRoomPane(); render();
-            });
-        }
-    }
-}
-
-function attachHLinkCycleHandlers() {
-    for (const g of hLinkGroups) {
-        if (g.floor_id !== state.floorId) continue;
-        for (const rid of g.room_ids) {
-            const poly = roomsL.querySelector(`polygon[data-room-id="${rid}"]`);
-            if (!poly) continue;
-            const parentG = poly.closest('g');
-
-            // Replace the mousedown handler with our cycle logic
-            const newG = parentG.cloneNode(true);
-            parentG.parentNode.replaceChild(newG, parentG);
-
-            const newPoly = newG.querySelector('polygon');
-            newPoly.addEventListener('mousedown', e => {
-                if (e.button !== 0 || state.mode !== 'select') {
-                    // For non-select modes, do default behavior
-                    if (state.mode === 'move' && newPoly.closest('g')) {
-                        const room = state.rooms.find(r => r.id === rid);
-                        if (room && room.map_points) {
-                            if (!state.selectedRoomIds.has(rid)) {
-                                state.selectedRoomIds = new Set([rid]);
-                                updateRoomPane(); render();
-                            }
-                            const pt = svgPt(e.clientX, e.clientY);
-                            const ids = [...state.selectedRoomIds].filter(id => {
-                                const r = state.rooms.find(r2 => r2.id === id);
-                                return r && r.map_points;
-                            });
-                            const origPtsByRoomId = {};
-                            ids.forEach(id => {
-                                const r = state.rooms.find(r2 => r2.id === id);
-                                origPtsByRoomId[id] = r.map_points.map(p => [...p]);
-                            });
-                            state.movingRoomIds = ids;
-                            state.movingOffset = { ox: pt.x, oy: pt.y, origPtsByRoomId };
-                        }
-                    } else if (state.mode === 'draw') {
-                        state.activeRoomId = rid;
-                        state.selectedRoomIds = new Set([rid]);
-                        updateRoomPane(); render();
-                    }
-                    e.stopPropagation();
-                    return;
-                }
-                e.stopPropagation();
-
-                // H-Link click-cycle logic
-                const combos = hLinkCombosFor(rid);
-                if (!combos.length) {
-                    // Not in any combo — normal toggle
-                    if (state.selectedRoomIds.has(rid)) state.selectedRoomIds.delete(rid);
-                    else state.selectedRoomIds.add(rid);
-                    updateRoomPane(); render();
-                    return;
-                }
-
-                // Determine current cycle position
-                const key = `hlink_${rid}`;
-                let cycleIdx = _hLinkCycleState[key] ?? -2; // -2 = nothing selected from this room
-
-                // Find which combo (if any) is currently selected via its virtual_room_id
-                let currentComboIdx = -2;
-                for (let ci = 0; ci < combos.length; ci++) {
-                    if (combos[ci].virtual_room_id && state.selectedRoomIds.has(combos[ci].virtual_room_id)) {
-                        currentComboIdx = ci;
-                        break;
-                    }
-                }
-                // Check if just the individual room is selected
-                if (currentComboIdx === -2 && state.selectedRoomIds.has(rid)) {
-                    currentComboIdx = -1; // individual room
-                }
-
-                // Cycle to next state
-                let nextIdx;
-                if (currentComboIdx === -2) {
-                    // Nothing selected → largest combo
-                    nextIdx = 0;
-                } else if (currentComboIdx >= 0 && currentComboIdx < combos.length - 1) {
-                    // Currently on a combo → next smaller combo
-                    nextIdx = currentComboIdx + 1;
-                } else if (currentComboIdx === combos.length - 1) {
-                    // Last combo → individual room
-                    nextIdx = -1;
-                } else {
-                    // Individual room → deselect
-                    nextIdx = -2;
-                }
-
-                // Apply selection
-                const group = hLinkGroupFor(rid);
-                const allGroupRoomIds = group ? group.room_ids : [];
-                const allGroupVirtualIds = group ? group.combinations.map(c => c.virtual_room_id).filter(Boolean) : [];
-
-                // Clear all group-related rooms from selection
-                [...allGroupRoomIds, ...allGroupVirtualIds].forEach(id => state.selectedRoomIds.delete(id));
-
-                if (nextIdx >= 0 && nextIdx < combos.length) {
-                    // Select the virtual room (single entry), not individual members
-                    const combo = combos[nextIdx];
-                    if (combo.virtual_room_id) {
-                        state.selectedRoomIds.add(combo.virtual_room_id);
-                    }
-                    setStatus(`H-Link: ${combo.name}`);
-                } else if (nextIdx === -1) {
-                    // Just the individual room
-                    state.selectedRoomIds.add(rid);
-                    const room = state.rooms.find(r => r.id === rid);
-                    setStatus(`Individual room: ${room ? room.name : rid}`);
-                } else {
-                    // Deselect
-                    setStatus('Deselected');
-                }
-
-                _hLinkCycleState[key] = nextIdx;
-                updateRoomPane(); render();
-            });
-        }
-    }
-}
-
-/** Helper: get all room_ids for the group containing this room */
-function g_room_ids_for(roomId) {
-    const g = hLinkGroupFor(roomId);
-    return g ? g.room_ids : [roomId];
-}
-
-// Close H-Link modal on backdrop click
-document.getElementById('hlink-modal-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('hlink-modal-overlay')) closeHLinkModal();
-});
-
-// Enter key in H-Link modal
-document.getElementById('hlink-combo-name').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); confirmHLink(); }
-});
-document.getElementById('hlink-group-name').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('hlink-combo-name').focus(); }
-});
 </script>
 
 </body>

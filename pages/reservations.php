@@ -333,11 +333,18 @@ $fp_buildings = $buildings;
                 <form id="res-form" onsubmit="saveReservation(event)">
                     <input type="hidden" id="f-id" name="id">
 
-                    <!-- Title -->
+                    <!-- Event Title -->
                     <div style="margin-bottom:14px;">
-                        <label class="ef-label">Event Title <span>(optional)</span></label>
-                        <input type="text" id="f-title" name="title" class="ef-input"
+                        <label class="ef-label">Event Title</label>
+                        <input type="text" id="f-title" name="title" required class="ef-input"
                                placeholder="e.g. Sunday Service, Youth Meeting...">
+                    </div>
+
+                    <!-- Description -->
+                    <div style="margin-bottom:14px;">
+                        <label class="ef-label">Description <span>(optional)</span></label>
+                        <textarea id="f-description" name="description" rows="2" class="ef-input"
+                                  style="resize:none;" placeholder="Brief description of the event..."></textarea>
                     </div>
 
                     <!-- Organization combobox -->
@@ -351,13 +358,13 @@ $fp_buildings = $buildings;
                         </div>
                     </div>
 
-                    <!-- Date (row 1) -->
+                    <!-- Date -->
                     <div style="margin-bottom:10px;">
                         <label class="ef-label">Date</label>
                         <input type="date" id="f-date" name="date" required class="ef-input">
                     </div>
 
-                    <!-- Start / End / Duration (row 2) -->
+                    <!-- Start / End / Duration -->
                     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
                         <div>
                             <label class="ef-label">Start</label>
@@ -406,6 +413,26 @@ $fp_buildings = $buildings;
                             No rooms selected
                         </div>
                         <input type="hidden" id="f-room-ids" name="room_ids">
+                        <input type="hidden" id="f-link-id" name="link_id">
+                    </div>
+
+                    <!-- Contact section -->
+                    <div style="margin-bottom:14px;">
+                        <label class="ef-label">Contact Name <span>(optional)</span></label>
+                        <input type="text" id="f-contact-name" name="contact_name" class="ef-input"
+                               placeholder="Person requesting this booking">
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                        <div>
+                            <label class="ef-label">Contact Phone <span>(optional)</span></label>
+                            <input type="tel" id="f-contact-phone" name="contact_phone" class="ef-input"
+                                   placeholder="Phone number">
+                        </div>
+                        <div>
+                            <label class="ef-label">Contact Email <span>(optional)</span></label>
+                            <input type="email" id="f-contact-email" name="contact_email" class="ef-input"
+                                   placeholder="Email address">
+                        </div>
                     </div>
 
                     <!-- Notes -->
@@ -413,6 +440,19 @@ $fp_buildings = $buildings;
                         <label class="ef-label">Notes <span>(optional)</span></label>
                         <textarea id="f-notes" name="notes" rows="2" class="ef-input"
                                   style="resize:none;" placeholder="Any additional details..."></textarea>
+                    </div>
+
+                    <!-- Color -->
+                    <div style="margin-bottom:14px;">
+                        <label class="ef-label">Color <span>(optional — auto-picks by building)</span></label>
+                        <input type="hidden" id="f-color" name="color" value="">
+                        <div id="color-swatches" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+                            <button type="button" onclick="pickColor('')" id="swatch-auto"
+                                    style="width:26px;height:26px;border-radius:6px;border:2px solid #2563eb;background:linear-gradient(135deg,#dbeafe 50%,#dcfce7 50%);cursor:pointer;position:relative;"
+                                    title="Auto (by building)">
+                                <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#374151;">A</span>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Recurring -->
@@ -549,17 +589,69 @@ const S = {
 const MONTHS       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const PALETTE = [
-    { bg:'#dbeafe', bd:'#3b82f6', tx:'#1e40af' },
-    { bg:'#dcfce7', bd:'#22c55e', tx:'#166534' },
-    { bg:'#fef3c7', bd:'#f59e0b', tx:'#92400e' },
-    { bg:'#fce7f3', bd:'#ec4899', tx:'#9d174d' },
-    { bg:'#ede9fe', bd:'#8b5cf6', tx:'#5b21b6' },
-    { bg:'#ffedd5', bd:'#f97316', tx:'#9a3412' },
-    { bg:'#cffafe', bd:'#06b6d4', tx:'#155e75' },
-    { bg:'#fef9c3', bd:'#eab308', tx:'#854d0e' },
+// ── Building-based color system ──────────────────────────
+// North = blue, South = green, mixed = teal
+const BLDG_COLORS = {
+    north: { bg:'#dbeafe', bd:'#3b82f6', tx:'#1e40af' },
+    south: { bg:'#dcfce7', bd:'#22c55e', tx:'#166534' },
+    mixed: { bg:'#ccfbf1', bd:'#14b8a6', tx:'#115e59' },
+};
+const PRESET_COLORS = [
+    { hex:'#3b82f6', label:'Blue'   },
+    { hex:'#22c55e', label:'Green'  },
+    { hex:'#14b8a6', label:'Teal'   },
+    { hex:'#f59e0b', label:'Amber'  },
+    { hex:'#ec4899', label:'Pink'   },
+    { hex:'#8b5cf6', label:'Purple' },
+    { hex:'#f97316', label:'Orange' },
+    { hex:'#06b6d4', label:'Cyan'   },
+    { hex:'#ef4444', label:'Red'    },
+    { hex:'#6b7280', label:'Gray'   },
 ];
-const color = id => PALETTE[Math.abs(id) % PALETTE.length];
+function hexToColors(hex) {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return {
+        bg: `rgba(${r},${g},${b},0.15)`,
+        bd: hex,
+        tx: `rgb(${Math.round(r*0.45)},${Math.round(g*0.45)},${Math.round(b*0.45)})`,
+    };
+}
+function buildingColor(rooms) {
+    if (!rooms || !rooms.length) return BLDG_COLORS.north;
+    const bldgs = new Set(rooms.map(r => (r.building||'').toLowerCase()));
+    if (bldgs.size > 1) return BLDG_COLORS.mixed;
+    const b = [...bldgs][0];
+    if (b.includes('south')) return BLDG_COLORS.south;
+    return BLDG_COLORS.north;
+}
+function resColor(ev) {
+    if (ev.color) return hexToColors(ev.color);
+    return buildingColor(ev.rooms);
+}
+
+// ── Color picker ────────────────────────────────────────
+(function initSwatches() {
+    const container = document.getElementById('color-swatches');
+    PRESET_COLORS.forEach(pc => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.title = pc.label;
+        btn.id = 'swatch-' + pc.hex.slice(1);
+        btn.style.cssText = `width:26px;height:26px;border-radius:6px;border:2px solid transparent;background:${pc.hex};cursor:pointer;transition:border-color .12s;`;
+        btn.onclick = () => pickColor(pc.hex);
+        container.appendChild(btn);
+    });
+})();
+
+function pickColor(hex) {
+    document.getElementById('f-color').value = hex;
+    // Update swatch borders
+    document.getElementById('swatch-auto').style.borderColor = hex === '' ? '#2563eb' : 'transparent';
+    PRESET_COLORS.forEach(pc => {
+        const el = document.getElementById('swatch-' + pc.hex.slice(1));
+        if (el) el.style.borderColor = hex === pc.hex ? '#111827' : 'transparent';
+    });
+}
 
 // ═══════════════════════════════════════════════════════════
 // FLOOR PLAN PICKER  (module instance)
@@ -577,15 +669,10 @@ const picker = new FloorPlanPicker({
     },
 });
 
-// Load linked groups and pass to picker
-fetch(BASE_PATH + '/api/room_links_api.php?action=get_links')
+// Load link groups and pass to picker
+fetch(BASE_PATH + '/api/links_api.php?action=get_links')
     .then(r => r.json())
-    .then(links => picker.setLinkedGroups(links));
-
-// Load H-Link groups and pass to picker
-fetch(BASE_PATH + '/api/h_link_api.php?action=get_groups')
-    .then(r => r.json())
-    .then(groups => picker.setHLinkGroups(groups))
+    .then(links => picker.setLinkGroups(links))
     .catch(() => {});
 
 // Convenience wrappers used elsewhere in the page
@@ -600,9 +687,10 @@ function removeRoomById(id) {
 // Push S.rooms into the editor's room display whenever the form is open
 function syncEditorRooms() {
     if (!document.getElementById('editor-form-wrap').classList.contains('open')) return;
+    const activeLink = picker.getActiveLink();
     const map = {};
     Object.values(S.rooms).forEach(r => { map[r.id] = r.name; });
-    setEditorRooms(map);
+    setEditorRooms(map, activeLink);
 }
 
 function refreshAfterRoomChange() {
@@ -843,7 +931,7 @@ function renderTimeline(rows) {
         const height = Math.max(22, (ev._e - ev._s) * (PX_PER_H/60));
         const pct    = 100 / ev._nCols;
         const rooms  = (ev.rooms||[]).map(r=>r.name).join(', ');
-        const c      = color(ev.rooms?.[0]?.id ?? 0);
+        const c      = resColor(ev);
         const recurIcon = (ev.is_recurring == 1) ? '<span title="Recurring" style="opacity:.6;margin-left:3px;">&#x1F501;</span>' : '';
         const label  = ev.title || ev.organization_name || rooms || 'Reservation';
         const sub    = (ev.title && ev.organization_name) ? ev.organization_name : rooms;
@@ -890,7 +978,12 @@ function openEditor(resId = null) {
             // Move selector to reservation start time
             tlSelectorMin = toMin(startStr);
             updateSelectorDisplay();
+            document.getElementById('f-description').value = r.description || '';
             document.getElementById('f-notes').value = r.notes || '';
+            document.getElementById('f-contact-name').value = r.contact_name || '';
+            document.getElementById('f-contact-phone').value = r.contact_phone || '';
+            document.getElementById('f-contact-email').value = r.contact_email || '';
+            pickColor(r.color || '');
             if (r.organization_id) {
                 document.getElementById('f-org-id').value   = r.organization_id;
                 document.getElementById('f-org-text').value = r.organization_name || '';
@@ -920,9 +1013,10 @@ function openEditor(resId = null) {
         document.getElementById('f-dur').value   = '60';
         recalcEndFromDur();
         // Pre-fill rooms from current selection
+        const activeLink = picker.getActiveLink();
         const map = {};
         Object.values(S.rooms).forEach(r => { map[r.id] = r.name; });
-        setEditorRooms(map);
+        setEditorRooms(map, activeLink);
     }
     document.getElementById('editor-empty').style.display = 'none';
     document.getElementById('editor-form-wrap').classList.add('open');
@@ -936,12 +1030,23 @@ function closeEditor() {
     if (S.date) loadRes(S.date);
 }
 
-function setEditorRooms(map) {
+function setEditorRooms(map, activeLink) {
     const ids = Object.keys(map);
     document.getElementById('f-room-ids').value = ids.join(',');
-    document.getElementById('f-rooms-display').innerHTML = ids.length
-        ? ids.map(id=>`<span style="display:inline-flex;align-items:center;gap:3px;background:#dbeafe;color:#1e40af;font-size:11px;font-weight:600;border-radius:20px;padding:2px 8px;margin:1px;">${esc(map[id])}</span>`).join('')
-        : '<span style="color:#9ca3af;font-size:12px;">No rooms — select from floor plan</span>';
+    document.getElementById('f-link-id').value = activeLink ? activeLink.id : '';
+    if (!ids.length) {
+        document.getElementById('f-rooms-display').innerHTML = '<span style="color:#9ca3af;font-size:12px;">No rooms — select from floor plan</span>';
+        return;
+    }
+    if (activeLink) {
+        // Show link group name as a single chip with member count
+        document.getElementById('f-rooms-display').innerHTML =
+            `<span style="display:inline-flex;align-items:center;gap:4px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:600;border-radius:20px;padding:2px 10px;margin:1px;">🔗 ${esc(activeLink.name)} <span style="color:#b45309;font-weight:400;">(${ids.length} rooms)</span></span>`;
+    } else {
+        document.getElementById('f-rooms-display').innerHTML = ids.map(id =>
+            `<span style="display:inline-flex;align-items:center;gap:3px;background:#dbeafe;color:#1e40af;font-size:11px;font-weight:600;border-radius:20px;padding:2px 8px;margin:1px;">${esc(map[id])}</span>`
+        ).join('');
+    }
 }
 
 function resetForm() {
@@ -956,6 +1061,8 @@ function resetForm() {
     document.getElementById('monthly-by-day').checked = true;
     onMonthlyTypeChange();
     document.getElementById('f-rooms-display').innerHTML = '<span style="color:#9ca3af;font-size:12px;">No rooms selected</span>';
+    document.getElementById('f-link-id').value = '';
+    pickColor('');
     document.getElementById('org-dropdown').classList.add('hidden');
 }
 

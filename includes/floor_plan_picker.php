@@ -202,9 +202,8 @@ class FloorPlanPicker {
         this._rooms     = {};   // { id: {id,name,floor,building} } — selected rooms
         this._floors    = [];   // loaded [{id,name,floor_order,building_id,building_name,rooms:[]}]
         this._bldFilter = null; // numeric building_id or null = all
-        this._linked    = [];   // [{id,name,building_id,room_ids:[…]}]
-        this._hLinkGroups = []; // [{id,name,floor_id,room_ids,[],combinations:[{id,name,virtual_room_id,room_ids}]}]
-        this._hLinkCycle  = {}; // { roomId: currentComboIndex } for click-cycle state
+        this._linkGroups = [];  // [{id,name,room_ids:[…]}] — link groups from server
+        this._activeLink = null; // {id,name,room_ids} — currently selected link group (or null for individual)
 
         if (!this._paneEl) { console.warn('FloorPlanPicker: pane element not found:', opts.paneId); return; }
 
@@ -233,29 +232,29 @@ class FloorPlanPicker {
 
     // ── Public API ────────────────────────────────────────────
 
-    /** Replace the V-linked-groups list and re-render. */
-    setLinkedGroups(groups) {
-        this._linked = groups || [];
+    /** Replace link groups and re-render. */
+    setLinkGroups(groups) {
+        this._linkGroups = (groups || []).map(g => ({
+            id: g.id,
+            name: g.name,
+            room_ids: g.room_ids.map(Number),
+            total_capacity: g.total_capacity || 0,
+        }));
         this._render();
     }
 
-    /** Replace the H-Link groups list and re-render. */
-    setHLinkGroups(groups) {
-        this._hLinkGroups = groups || [];
-        this._hLinkCycle = {};
-        this._render();
-    }
+    /** Returns the currently active link group, or null if individual rooms are selected. */
+    getActiveLink() { return this._activeLink; }
 
     /** Returns a shallow copy of the selected-rooms map. */
     getSelection() { return Object.assign({}, this._rooms); }
 
-    /** Pre-select rooms by ID array (expands linked groups). */
+    /** Pre-select rooms by ID array. */
     selectRooms(ids) {
         ids.forEach(id => {
             const r = this._findRoom(id);
             if (r) this._rooms[id] = { id, name: r.name, floor: r._floorName, building: r._bldName };
         });
-        this._expandLinked();
         this._render();
         this._onChange(this._rooms);
     }
@@ -263,6 +262,7 @@ class FloorPlanPicker {
     /** Deselect everything. */
     clearSelection() {
         this._rooms = {};
+        this._activeLink = null;
         this._render();
         this._onChange(this._rooms);
     }
@@ -316,185 +316,89 @@ class FloorPlanPicker {
         return null;
     }
 
-    /** Returns the V-link group that contains roomId, or null. */
-    _groupFor(id) {
-        return this._linked.find(g => g.room_ids.includes(Number(id))) || null;
-    }
-
-    /** Returns the H-Link group that contains roomId, or null. */
-    _hGroupFor(id) {
-        return this._hLinkGroups.find(g => g.room_ids.includes(Number(id))) || null;
-    }
-
-    /** Returns all H-Link combos that include roomId, sorted largest-first then alpha. */
-    _hCombosFor(id) {
+    /** Get all link groups that contain roomId, sorted largest-first. */
+    _linksFor(id) {
         const rid = Number(id);
-        const combos = [];
-        for (const g of this._hLinkGroups) {
-            for (const c of g.combinations) {
-                if (c.room_ids.includes(rid)) combos.push(c);
-            }
-        }
-        combos.sort((a, b) => {
-            if (b.room_ids.length !== a.room_ids.length) return b.room_ids.length - a.room_ids.length;
-            return a.name.localeCompare(b.name);
-        });
-        return combos;
+        return this._linkGroups
+            .filter(g => g.room_ids.includes(rid))
+            .sort((a, b) => b.room_ids.length - a.room_ids.length || a.name.localeCompare(b.name));
     }
 
-    /** Check if a physical room should appear selected because its V-Link group's virtual room is selected. */
-    _isVLinkSelected(roomId) {
-        const rid = Number(roomId);
-        for (const g of this._linked) {
-            if (g.virtual_room_id && this._rooms[g.virtual_room_id] && g.room_ids.includes(rid)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** Check if a physical room should appear selected because its combo's virtual room is selected. */
-    _isHLinkSelected(roomId) {
-        const rid = Number(roomId);
-        for (const g of this._hLinkGroups) {
-            for (const c of g.combinations) {
-                if (c.virtual_room_id && this._rooms[c.virtual_room_id] && c.room_ids.includes(rid)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /** Get the combo whose virtual_room_id is currently selected for this H-Link group. */
-    _selectedHComboFor(roomId) {
-        const rid = Number(roomId);
-        const g = this._hGroupFor(rid);
-        if (!g) return null;
-        for (const c of g.combinations) {
-            if (c.virtual_room_id && this._rooms[c.virtual_room_id]) return c;
-        }
-        return null;
-    }
-
-    /** When pre-selecting, expand any linked groups to their virtual room. */
-    _expandLinked() {
-        const ids = Object.keys(this._rooms).map(Number);
-        for (const g of this._linked) {
-            if (g.room_ids.some(id => ids.includes(id))) {
-                if (g.virtual_room_id) {
-                    // Replace member rooms with the single virtual room
-                    g.room_ids.forEach(rid => delete this._rooms[rid]);
-                    const vr = this._findRoom(g.virtual_room_id);
-                    const vrName = vr ? vr.name : g.name;
-                    const vrFloor = vr ? vr._floorName : '';
-                    const vrBld = vr ? vr._bldName : '';
-                    this._rooms[g.virtual_room_id] = {
-                        id: g.virtual_room_id, name: vrName,
-                        floor: vrFloor, building: vrBld
-                    };
-                } else {
-                    // Fallback: select all members
-                    g.room_ids.forEach(rid => {
-                        const r = this._findRoom(rid);
-                        if (r) this._rooms[rid] = { id: rid, name: r.name, floor: r._floorName, building: r._bldName };
-                    });
-                }
-            }
-        }
+    /** Check if a room should appear selected because its link group is active. */
+    _isLinkSelected(roomId) {
+        if (!this._activeLink) return false;
+        return this._activeLink.room_ids.includes(Number(roomId));
     }
 
     _toggle(id, name, floorName, bldName) {
-        const isSel = !!this._rooms[id] || this._isVLinkSelected(id);
-        const group = this._groupFor(id);
-        const hGroup = this._hGroupFor(id);
+        const rid = Number(id);
+        const links = this._linksFor(rid);
 
         // In single-select mode, clear all other rooms first
-        if (this._singleSelect && !isSel) {
+        if (this._singleSelect) {
             this._rooms = {};
+            this._activeLink = null;
         }
 
-        if (group) {
-            // V-Link: select/deselect the single virtual room (not individual members)
-            if (group.virtual_room_id) {
-                if (isSel) {
-                    // Deselect: remove virtual room + any member rooms from selection
-                    delete this._rooms[group.virtual_room_id];
-                    group.room_ids.forEach(rid => delete this._rooms[rid]);
-                } else {
-                    // Select: add just the virtual room
-                    const vr = this._findRoom(group.virtual_room_id);
-                    const vrName = vr ? vr.name : group.name;
-                    const vrFloor = vr ? vr._floorName : floorName;
-                    const vrBld = vr ? vr._bldName : bldName;
-                    this._rooms[group.virtual_room_id] = {
-                        id: group.virtual_room_id, name: vrName,
-                        floor: vrFloor, building: vrBld
-                    };
-                }
-            } else {
-                // Fallback for V-Link groups without virtual rooms (shouldn't happen after migration)
-                if (isSel) {
-                    group.room_ids.forEach(rid => delete this._rooms[rid]);
-                } else {
-                    group.room_ids.forEach(rid => {
-                        const r = this._findRoom(rid);
-                        if (r) this._rooms[rid] = { id: rid, name: r.name, floor: r._floorName, building: r._bldName };
-                    });
-                }
-            }
-        } else if (hGroup) {
-            // H-Link: click-cycle through combos → individual → deselect
-            // Combos are selected by their virtual_room_id (one room, not many)
-            const combos = this._hCombosFor(id);
-            const allGroupRoomIds = hGroup.room_ids;
-            const allVirtualIds = hGroup.combinations.map(c => c.virtual_room_id).filter(Boolean);
+        if (!links.length) {
+            // No link groups — simple toggle
+            if (this._rooms[id]) { delete this._rooms[id]; }
+            else { this._rooms[id] = { id, name, floor: floorName, building: bldName }; }
+            this._activeLink = null;
+        } else {
+            // Cycle: largest group → … → smallest group → individual → deselect
+            // Determine current position in cycle
+            let currentIdx = -2; // -2 = nothing selected
 
-            // Determine current state by checking which virtual_room_id is selected
-            let currentComboIdx = -2; // nothing selected
-            for (let ci = 0; ci < combos.length; ci++) {
-                if (combos[ci].virtual_room_id && this._rooms[combos[ci].virtual_room_id]) {
-                    currentComboIdx = ci;
-                    break;
-                }
-            }
-            // Check if just the individual room is selected (no virtual room)
-            if (currentComboIdx === -2 && this._rooms[id]) {
-                currentComboIdx = -1; // individual
+            if (this._activeLink) {
+                // Check which link group is currently active
+                currentIdx = links.findIndex(g => g.id === this._activeLink.id);
+                if (currentIdx === -1) currentIdx = -2;
+            } else if (this._rooms[id]) {
+                currentIdx = -1; // individual room selected
             }
 
             // Calculate next state
             let nextIdx;
-            if (currentComboIdx === -2) nextIdx = 0; // → largest combo
-            else if (currentComboIdx >= 0 && currentComboIdx < combos.length - 1) nextIdx = currentComboIdx + 1;
-            else if (currentComboIdx === combos.length - 1) nextIdx = -1; // → individual
-            else nextIdx = -2; // → deselect
-
-            // Clear all group member rooms + virtual rooms from selection
-            [...allGroupRoomIds, ...allVirtualIds].forEach(rid => delete this._rooms[rid]);
-
-            if (nextIdx >= 0 && nextIdx < combos.length) {
-                // Select the VIRTUAL room (single entry) — not individual members
-                const combo = combos[nextIdx];
-                if (combo.virtual_room_id) {
-                    const vr = this._findRoom(combo.virtual_room_id);
-                    const vrName = vr ? vr.name : combo.name;
-                    const vrFloor = vr ? vr._floorName : floorName;
-                    const vrBld = vr ? vr._bldName : bldName;
-                    this._rooms[combo.virtual_room_id] = {
-                        id: combo.virtual_room_id, name: vrName,
-                        floor: vrFloor, building: vrBld
-                    };
-                }
-            } else if (nextIdx === -1) {
-                // Select just the individual physical room
-                this._rooms[id] = { id, name, floor: floorName, building: bldName };
+            if (currentIdx === -2) {
+                nextIdx = 0; // → largest group
+            } else if (currentIdx >= 0 && currentIdx < links.length - 1) {
+                nextIdx = currentIdx + 1; // → next smaller group
+            } else if (currentIdx === links.length - 1) {
+                nextIdx = -1; // → individual room
+            } else {
+                nextIdx = -2; // → deselect
             }
-            // nextIdx === -2: everything cleared already
-        } else {
-            if (isSel) delete this._rooms[id];
-            else this._rooms[id] = { id, name, floor: floorName, building: bldName };
+
+            // Clear all rooms related to current link groups for this room
+            const allRelatedIds = new Set();
+            links.forEach(g => g.room_ids.forEach(rid => allRelatedIds.add(rid)));
+            allRelatedIds.forEach(rid => delete this._rooms[rid]);
+
+            if (nextIdx >= 0 && nextIdx < links.length) {
+                // Select a link group — add all member rooms under the group name
+                const group = links[nextIdx];
+                this._activeLink = group;
+                group.room_ids.forEach(mrid => {
+                    const r = this._findRoom(mrid);
+                    if (r) {
+                        this._rooms[mrid] = {
+                            id: mrid, name: r.name,
+                            floor: r._floorName, building: r._bldName,
+                            _linkId: group.id, _linkName: group.name,
+                        };
+                    }
+                });
+            } else if (nextIdx === -1) {
+                // Individual room
+                this._activeLink = null;
+                this._rooms[id] = { id, name, floor: floorName, building: bldName };
+            } else {
+                // Deselect all
+                this._activeLink = null;
+            }
         }
+
         this._render();
         this._onChange(this._rooms);
     }
@@ -575,18 +479,17 @@ class FloorPlanPicker {
                 for (const room of floor.rooms) {
                     if (!room.map_points || room.map_points.length < 3) continue;
 
-                    // Skip virtual combo rooms in the picker map view
-                    if (room.is_virtual == 1) continue;
+                    const isSel   = !!this._rooms[room.id] || this._isLinkSelected(room.id);
+                    const isLinkedPeer = !isSel && this._linkGroups.some(g =>
+                        g.room_ids.includes(room.id) && g.room_ids.some(rid => !!this._rooms[rid])
+                    );
 
-                    const isSel   = !!this._rooms[room.id] || this._isVLinkSelected(room.id) || this._isHLinkSelected(room.id);
-                    const isHLinked = !!this._hGroupFor(room.id);
-
-                    // Colour scheme: selected → green, H-Linked → purple, unselected → blue
+                    // Colour scheme: selected → green, linked peer → amber, unselected → blue
                     let fill, stroke, strokeW;
                     if (isSel) {
                         fill = 'rgba(34,197,94,0.35)'; stroke = '#16a34a'; strokeW = '0.8';
-                    } else if (isHLinked) {
-                        fill = 'rgba(168,85,247,0.15)'; stroke = '#7c3aed'; strokeW = '0.5';
+                    } else if (isLinkedPeer) {
+                        fill = 'rgba(245,158,11,0.15)'; stroke = '#d97706'; strokeW = '0.5';
                     } else {
                         fill = 'rgba(59,130,246,0.15)';  stroke = '#1d4ed8'; strokeW = '0.5';
                     }

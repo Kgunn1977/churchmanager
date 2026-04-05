@@ -337,9 +337,10 @@ switch ($action) {
         $id = (int)($_GET['id'] ?? 0);
         if (!$id) { echo json_encode(['error' => 'ID required']); exit; }
         $stmt = $db->prepare("
-            SELECT r.*, o.name AS organization_name
+            SELECT r.*, o.name AS organization_name, rl.name AS link_name
             FROM reservations r
             LEFT JOIN organizations o ON o.id = r.organization_id
+            LEFT JOIN room_links rl ON rl.id = r.link_id
             WHERE r.id = ?
         ");
         $stmt->execute([$id]);
@@ -386,11 +387,18 @@ switch ($action) {
         $orgId       = ($_POST['organization_id'] ?? '') !== '' ? (int)$_POST['organization_id'] : null;
         $startDt     = $_POST['start_datetime'] ?? '';
         $endDt       = $_POST['end_datetime']   ?? '';
+        $description = trim($_POST['description'] ?? '') ?: null;
         $notes       = trim($_POST['notes'] ?? '') ?: null;
+        $contactName = trim($_POST['contact_name'] ?? '') ?: null;
+        $contactPhone= trim($_POST['contact_phone'] ?? '') ?: null;
+        $contactEmail= trim($_POST['contact_email'] ?? '') ?: null;
         $isRecurring = (int)($_POST['is_recurring'] ?? 0);
         $recurRule   = $isRecurring ? ($_POST['recurrence_rule'] ?? null)      : null;
         $recurEndRaw = $isRecurring ? trim($_POST['recurrence_end_date'] ?? '') : '';
         $recurEnd    = ($recurEndRaw !== '' && $recurEndRaw !== '0000-00-00') ? $recurEndRaw : null;
+        $linkId      = ($_POST['link_id'] ?? '') !== '' ? (int)$_POST['link_id'] : null;
+        $color       = trim($_POST['color'] ?? '') ?: null;
+        if ($color && !preg_match('/^#[0-9a-fA-F]{6}$/', $color)) $color = null;
         $rawIds      = $_POST['room_ids'] ?? '';
         $roomIds     = array_values(array_filter(array_map('intval', explode(',', $rawIds))));
         $userId      = getCurrentUser()['id'] ?? null;
@@ -405,20 +413,22 @@ switch ($action) {
         if ($id) {
             $stmt = $db->prepare("
                 UPDATE reservations
-                SET title=?, organization_id=?, start_datetime=?, end_datetime=?,
-                    notes=?, is_recurring=?, recurrence_rule=?, recurrence_end_date=?
+                SET title=?, description=?, organization_id=?, start_datetime=?, end_datetime=?,
+                    notes=?, contact_name=?, contact_phone=?, contact_email=?,
+                    is_recurring=?, recurrence_rule=?, recurrence_end_date=?, link_id=?, color=?
                 WHERE id=?
             ");
-            $stmt->execute([$title, $orgId, $startDt, $endDt, $notes, $isRecurring, $recurRule, $recurEnd, $id]);
+            $stmt->execute([$title, $description, $orgId, $startDt, $endDt, $notes, $contactName, $contactPhone, $contactEmail, $isRecurring, $recurRule, $recurEnd, $linkId, $color, $id]);
             $db->prepare("DELETE FROM reservation_rooms WHERE reservation_id=?")->execute([$id]);
         } else {
             $stmt = $db->prepare("
                 INSERT INTO reservations
-                    (title, organization_id, start_datetime, end_datetime, notes,
-                     is_recurring, recurrence_rule, recurrence_end_date, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (title, description, organization_id, start_datetime, end_datetime, notes,
+                     contact_name, contact_phone, contact_email,
+                     is_recurring, recurrence_rule, recurrence_end_date, link_id, color, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$title, $orgId, $startDt, $endDt, $notes, $isRecurring, $recurRule, $recurEnd, $userId]);
+            $stmt->execute([$title, $description, $orgId, $startDt, $endDt, $notes, $contactName, $contactPhone, $contactEmail, $isRecurring, $recurRule, $recurEnd, $linkId, $color, $userId]);
             $id = (int)$db->lastInsertId();
         }
 
@@ -427,63 +437,7 @@ switch ($action) {
             $rrStmt->execute([$id, $rid]);
         }
 
-        // ── H-Link conflict: check for overlapping reservations on related rooms ──
-        $hlinkConflicts = [];
-        try {
-            // Find all H-Link related room IDs (virtual combos + member rooms)
-            $allRelated = $roomIds;
-
-            // If any booked room is a member of a combo → get virtual room IDs
-            $ph = implode(',', array_fill(0, count($roomIds), '?'));
-            $vStmt = $db->prepare("
-                SELECT DISTINCT c.virtual_room_id
-                FROM h_link_combination_rooms cr
-                JOIN h_link_combinations c ON c.id = cr.combination_id
-                WHERE cr.room_id IN ($ph) AND c.virtual_room_id IS NOT NULL
-            ");
-            $vStmt->execute($roomIds);
-            $relatedVirtual = array_map('intval', array_column($vStmt->fetchAll(), 'virtual_room_id'));
-
-            // If any booked room IS a virtual combo → get member room IDs
-            $mStmt = $db->prepare("
-                SELECT DISTINCT cr.room_id
-                FROM h_link_combinations c
-                JOIN h_link_combination_rooms cr ON cr.combination_id = c.id
-                WHERE c.virtual_room_id IN ($ph)
-            ");
-            $mStmt->execute($roomIds);
-            $relatedMembers = array_map('intval', array_column($mStmt->fetchAll(), 'room_id'));
-
-            // Combine all related IDs but exclude the ones already booked
-            $conflictCheckIds = array_values(array_unique(array_merge($relatedVirtual, $relatedMembers)));
-            $conflictCheckIds = array_diff($conflictCheckIds, $roomIds);
-
-            if (!empty($conflictCheckIds)) {
-                // Check for overlapping reservations on these related rooms
-                $ph2 = implode(',', array_fill(0, count($conflictCheckIds), '?'));
-                $cStmt = $db->prepare("
-                    SELECT r.id, r.title, r.start_datetime, r.end_datetime,
-                           GROUP_CONCAT(rr.room_id) AS conflicting_room_ids
-                    FROM reservations r
-                    JOIN reservation_rooms rr ON rr.reservation_id = r.id
-                    WHERE rr.room_id IN ($ph2)
-                      AND r.id != ?
-                      AND r.start_datetime < ?
-                      AND r.end_datetime > ?
-                    GROUP BY r.id
-                ");
-                $cStmt->execute(array_merge($conflictCheckIds, [$id, $endDt, $startDt]));
-                $hlinkConflicts = $cStmt->fetchAll();
-            }
-        } catch (Exception $e) {
-            // Don't fail the save, just skip conflict info
-        }
-
-        $response = ['success' => true, 'id' => $id];
-        if (!empty($hlinkConflicts)) {
-            $response['hlink_conflicts'] = $hlinkConflicts;
-        }
-        echo json_encode($response);
+        echo json_encode(['success' => true, 'id' => $id]);
         break;
 
     // ── POST delete reservation (all instances / non-recurring) ─

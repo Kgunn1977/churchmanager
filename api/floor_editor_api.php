@@ -31,7 +31,7 @@ switch ($action) {
     // ── GET rooms for a floor (with map_points) ──────────────────────────────
     case 'get_rooms':
         $fid = intval($_GET['floor_id'] ?? 0);
-        $stmt = $db->prepare("SELECT id, name, abbreviation, capacity, map_points, is_reservable, is_storage, is_virtual, h_link_combination_id FROM rooms WHERE floor_id = ? ORDER BY name");
+        $stmt = $db->prepare("SELECT id, name, abbreviation, capacity, map_points, is_reservable, is_storage FROM rooms WHERE floor_id = ? ORDER BY name");
         $stmt->execute([$fid]);
         $rows = $stmt->fetchAll();
         foreach ($rows as &$r) {
@@ -39,33 +39,6 @@ switch ($action) {
             $r['capacity']      = $r['capacity'] !== null ? (int)$r['capacity'] : null;
             $r['is_reservable'] = (int)($r['is_reservable'] ?? 1);
             $r['is_storage']    = (int)($r['is_storage'] ?? 0);
-            $r['is_virtual']    = (int)($r['is_virtual'] ?? 0);
-            $r['h_link_combination_id'] = $r['h_link_combination_id'] ? (int)$r['h_link_combination_id'] : null;
-            $r['linked_member_room_ids'] = null;
-
-            // For virtual rooms, look up member room IDs so renderers can highlight them individually
-            if ((int)$r['is_virtual'] === 1) {
-                $memberIds = [];
-                // H-Link: virtual room → h_link_combinations → h_link_combination_rooms
-                if ($r['h_link_combination_id']) {
-                    $mStmt = $db->prepare("SELECT room_id FROM h_link_combination_rooms WHERE combination_id = ?");
-                    $mStmt->execute([$r['h_link_combination_id']]);
-                    $memberIds = array_map('intval', array_column($mStmt->fetchAll(), 'room_id'));
-                }
-                // V-Link: virtual room → room_links.virtual_room_id → room_link_members
-                if (empty($memberIds)) {
-                    $mStmt = $db->prepare("
-                        SELECT rlm.room_id FROM room_link_members rlm
-                        JOIN room_links rl ON rl.id = rlm.link_id
-                        WHERE rl.virtual_room_id = ?
-                    ");
-                    $mStmt->execute([$r['id']]);
-                    $memberIds = array_map('intval', array_column($mStmt->fetchAll(), 'room_id'));
-                }
-                if (!empty($memberIds)) {
-                    $r['linked_member_room_ids'] = $memberIds;
-                }
-            }
         }
         echo json_encode($rows);
         break;
@@ -112,7 +85,7 @@ switch ($action) {
             $stmt = $db->prepare("INSERT INTO rooms (floor_id, name, abbreviation) VALUES (?, ?, ?)");
             $stmt->execute([$fid, $name, $abbr ?: null]);
             $id = (int)$db->lastInsertId();
-            echo json_encode(['id' => $id, 'name' => $name, 'abbreviation' => $abbr ?: null, 'capacity' => null, 'floor_id' => $fid, 'map_points' => null, 'is_reservable' => 1, 'is_storage' => 0, 'is_virtual' => 0, 'h_link_combination_id' => null]);
+            echo json_encode(['id' => $id, 'name' => $name, 'abbreviation' => $abbr ?: null, 'capacity' => null, 'floor_id' => $fid, 'map_points' => null, 'is_reservable' => 1, 'is_storage' => 0]);
         } catch (PDOException $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
@@ -234,15 +207,13 @@ switch ($action) {
         );
         $floors = $stmt->fetchAll();
         foreach ($floors as &$floor) {
-            $roomStmt = $db->prepare("SELECT id, name, abbreviation, map_points, is_reservable, is_storage, is_virtual, h_link_combination_id FROM rooms WHERE floor_id = ? ORDER BY name");
+            $roomStmt = $db->prepare("SELECT id, name, abbreviation, map_points, is_reservable, is_storage FROM rooms WHERE floor_id = ? ORDER BY name");
             $roomStmt->execute([$floor['id']]);
             $rooms = $roomStmt->fetchAll();
             foreach ($rooms as &$r) {
                 $r['map_points']    = $r['map_points'] ? json_decode($r['map_points'], true) : null;
                 $r['is_reservable'] = (int)($r['is_reservable'] ?? 1);
                 $r['is_storage']    = (int)($r['is_storage'] ?? 0);
-                $r['is_virtual']    = (int)($r['is_virtual'] ?? 0);
-                $r['h_link_combination_id'] = $r['h_link_combination_id'] ? (int)$r['h_link_combination_id'] : null;
             }
             $floor['rooms'] = $rooms;
         }
@@ -261,15 +232,13 @@ switch ($action) {
         $floorStmt->execute([$bid]);
         $floors = $floorStmt->fetchAll();
         foreach ($floors as &$floor) {
-            $roomStmt = $db->prepare("SELECT id, name, abbreviation, map_points, is_reservable, is_storage, is_virtual, h_link_combination_id FROM rooms WHERE floor_id = ? ORDER BY name");
+            $roomStmt = $db->prepare("SELECT id, name, abbreviation, map_points, is_reservable, is_storage FROM rooms WHERE floor_id = ? ORDER BY name");
             $roomStmt->execute([$floor['id']]);
             $rooms = $roomStmt->fetchAll();
             foreach ($rooms as &$r) {
                 $r['map_points']    = $r['map_points'] ? json_decode($r['map_points'], true) : null;
                 $r['is_reservable'] = (int)($r['is_reservable'] ?? 1);
                 $r['is_storage']    = (int)($r['is_storage'] ?? 0);
-                $r['is_virtual']    = (int)($r['is_virtual'] ?? 0);
-                $r['h_link_combination_id'] = $r['h_link_combination_id'] ? (int)$r['h_link_combination_id'] : null;
             }
             $floor['rooms'] = $rooms;
         }
