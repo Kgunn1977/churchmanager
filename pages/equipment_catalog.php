@@ -243,6 +243,10 @@ $catTextColors = [
             <input id="catModal-name" type="text" placeholder="e.g. Folding Chair" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font-size:13px;outline:none;box-sizing:border-box;">
         </div>
         <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:3px;">Nickname</label>
+            <input id="catModal-nickname" type="text" placeholder="Short display name (optional)" maxlength="100" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font-size:13px;outline:none;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:12px;">
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:3px;">Category</label>
             <select id="catModal-category" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font-size:13px;outline:none;box-sizing:border-box;background:white;">
                 <?php foreach ($categories as $key => $label): ?>
@@ -348,7 +352,7 @@ function renderCatalog() {
                  onclick="onCatItemClick(${item.id})">
                 <div>
                     <span class="cat-badge" style="background:${bg};color:${color};margin-right:6px;">${CAT_LABELS[item.category] || item.category}</span>
-                    <span class="cat-item-name">${esc(item.name)}</span>
+                    <span class="cat-item-name">${esc(item.name)}${item.nickname ? '<span style="font-weight:400;color:#6b7280;font-size:11px;margin-left:4px;">(' + esc(item.nickname) + ')</span>' : ''}</span>
                 </div>
                 <span class="cat-item-qty">${item.total_quantity}</span>
                 <span class="cat-item-qty" style="color:#0369a1;">${item.stored_qty}</span>
@@ -564,6 +568,7 @@ function openAddCatalogModal() {
     document.getElementById('catModalTitle').textContent = 'Add Equipment';
     document.getElementById('catModal-id').value = '';
     document.getElementById('catModal-name').value = '';
+    document.getElementById('catModal-nickname').value = '';
     document.getElementById('catModal-category').value = 'furniture';
     document.getElementById('catModal-desc').value = '';
     document.getElementById('catModal-totalQty').value = 0;
@@ -576,6 +581,7 @@ function openEditCatalogModal(item) {
     document.getElementById('catModalTitle').textContent = 'Edit Equipment';
     document.getElementById('catModal-id').value = item.id;
     document.getElementById('catModal-name').value = item.name;
+    document.getElementById('catModal-nickname').value = item.nickname || '';
     document.getElementById('catModal-category').value = item.category;
     document.getElementById('catModal-desc').value = item.description || '';
     document.getElementById('catModal-totalQty').value = item.total_quantity || 0;
@@ -589,17 +595,18 @@ function closeCatModal() {
 }
 
 async function saveCatalogItem() {
-    const id    = document.getElementById('catModal-id').value;
-    const name  = document.getElementById('catModal-name').value.trim();
-    const cat   = document.getElementById('catModal-category').value;
-    const desc  = document.getElementById('catModal-desc').value.trim();
-    const total = parseInt(document.getElementById('catModal-totalQty').value) || 0;
+    const id       = document.getElementById('catModal-id').value;
+    const name     = document.getElementById('catModal-name').value.trim();
+    const nickname = document.getElementById('catModal-nickname').value.trim();
+    const cat      = document.getElementById('catModal-category').value;
+    const desc     = document.getElementById('catModal-desc').value.trim();
+    const total    = parseInt(document.getElementById('catModal-totalQty').value) || 0;
     if (!name) { document.getElementById('catModal-name').focus(); return; }
 
     if (id) {
-        await apiPost('update_catalog_item', { id: parseInt(id), name, category: cat, description: desc, total_quantity: total });
+        await apiPost('update_catalog_item', { id: parseInt(id), name, nickname, category: cat, description: desc, total_quantity: total });
     } else {
-        await apiPost('add_catalog_item', { name, category: cat, description: desc, total_quantity: total });
+        await apiPost('add_catalog_item', { name, nickname, category: cat, description: desc, total_quantity: total });
     }
     closeCatModal();
     await loadCatalog();

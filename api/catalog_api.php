@@ -33,11 +33,12 @@ switch ($action) {
         break;
 
     case 'add':
-        $name = trim($input['name'] ?? '');
-        $qty  = max(1, (int)($input['quantity'] ?? 1));
+        $name     = trim($input['name'] ?? '');
+        $nickname = trim($input['nickname'] ?? '');
+        $qty      = max(1, (int)($input['quantity'] ?? 1));
         if (!$name) { echo json_encode(['error' => 'Name required']); break; }
         try {
-            $db->prepare("INSERT INTO {$type} (name, quantity) VALUES (?,?)")->execute([$name, $qty]);
+            $db->prepare("INSERT INTO {$type} (name, nickname, quantity) VALUES (?,?,?)")->execute([$name, $nickname ?: null, $qty]);
             echo json_encode(['success' => true, 'id' => (int)$db->lastInsertId()]);
         } catch (PDOException $e) {
             echo json_encode(['error' => $e->getMessage()]);
@@ -45,12 +46,13 @@ switch ($action) {
         break;
 
     case 'update':
-        $id   = (int)($input['id'] ?? 0);
-        $name = trim($input['name'] ?? '');
-        $qty  = max(1, (int)($input['quantity'] ?? 1));
+        $id       = (int)($input['id'] ?? 0);
+        $name     = trim($input['name'] ?? '');
+        $nickname = trim($input['nickname'] ?? '');
+        $qty      = max(1, (int)($input['quantity'] ?? 1));
         if (!$id || !$name) { echo json_encode(['error' => 'id and name required']); break; }
         try {
-            $db->prepare("UPDATE {$type} SET name=?, quantity=? WHERE id=?")->execute([$name, $qty, $id]);
+            $db->prepare("UPDATE {$type} SET name=?, nickname=?, quantity=? WHERE id=?")->execute([$name, $nickname ?: null, $qty, $id]);
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
             echo json_encode(['error' => $e->getMessage()]);

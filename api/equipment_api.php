@@ -88,14 +88,15 @@ switch ($action) {
 
     // ── ADD / CREATE catalog item ────────────────────────────
     case 'add_catalog_item':
-        $name  = trim($input['name'] ?? '');
-        $desc  = trim($input['description'] ?? '');
-        $cat   = trim($input['category'] ?? 'other');
-        $total = max(0, (int)($input['total_quantity'] ?? 0));
+        $name     = trim($input['name'] ?? '');
+        $nickname = trim($input['nickname'] ?? '');
+        $desc     = trim($input['description'] ?? '');
+        $cat      = trim($input['category'] ?? 'other');
+        $total    = max(0, (int)($input['total_quantity'] ?? 0));
         if (!$name) { echo json_encode(['error' => 'Name required']); break; }
         try {
-            $stmt = $db->prepare("INSERT INTO equipment_catalog (name, description, category, total_quantity) VALUES (?,?,?,?)");
-            $stmt->execute([$name, $desc, $cat, $total]);
+            $stmt = $db->prepare("INSERT INTO equipment_catalog (name, nickname, description, category, total_quantity) VALUES (?,?,?,?,?)");
+            $stmt->execute([$name, $nickname ?: null, $desc, $cat, $total]);
             $id = (int)$db->lastInsertId();
             echo json_encode(['success' => true, 'id' => $id]);
         } catch (PDOException $e) {
@@ -105,15 +106,16 @@ switch ($action) {
 
     // ── UPDATE catalog item ──────────────────────────────────
     case 'update_catalog_item':
-        $id    = (int)($input['id'] ?? 0);
-        $name  = trim($input['name'] ?? '');
-        $desc  = trim($input['description'] ?? '');
-        $cat   = trim($input['category'] ?? 'other');
-        $total = max(0, (int)($input['total_quantity'] ?? 0));
+        $id       = (int)($input['id'] ?? 0);
+        $name     = trim($input['name'] ?? '');
+        $nickname = trim($input['nickname'] ?? '');
+        $desc     = trim($input['description'] ?? '');
+        $cat      = trim($input['category'] ?? 'other');
+        $total    = max(0, (int)($input['total_quantity'] ?? 0));
         if (!$id || !$name) { echo json_encode(['error' => 'id and name required']); break; }
         try {
-            $db->prepare("UPDATE equipment_catalog SET name=?, description=?, category=?, total_quantity=? WHERE id=?")
-               ->execute([$name, $desc, $cat, $total, $id]);
+            $db->prepare("UPDATE equipment_catalog SET name=?, nickname=?, description=?, category=?, total_quantity=? WHERE id=?")
+               ->execute([$name, $nickname ?: null, $desc, $cat, $total, $id]);
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
             echo json_encode(['error' => $e->getMessage()]);

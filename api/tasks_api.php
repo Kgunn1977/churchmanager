@@ -91,10 +91,10 @@ switch ($action) {
         $table = str_replace('get_', '', $action);
         $q = trim($_GET['q'] ?? '');
         if ($q !== '') {
-            $stmt = $db->prepare("SELECT id, name FROM {$table} WHERE name LIKE ? ORDER BY name LIMIT 30");
-            $stmt->execute(['%' . $q . '%']);
+            $stmt = $db->prepare("SELECT id, name, nickname FROM {$table} WHERE name LIKE ? OR nickname LIKE ? ORDER BY name LIMIT 30");
+            $stmt->execute(['%' . $q . '%', '%' . $q . '%']);
         } else {
-            $stmt = $db->query("SELECT id, name FROM {$table} ORDER BY name LIMIT 30");
+            $stmt = $db->query("SELECT id, name, nickname FROM {$table} ORDER BY name LIMIT 30");
         }
         echo json_encode($stmt->fetchAll());
         break;
@@ -150,10 +150,10 @@ switch ($action) {
         $tasks = $stmt->fetchAll();
 
         // Load resources, rooms, workers for each task
-        $stTools   = $db->prepare("SELECT r.id, r.name FROM task_tools tr JOIN tools r ON r.id = tr.tool_id WHERE tr.task_id = ?");
-        $stSupp    = $db->prepare("SELECT r.id, r.name FROM task_supplies tr JOIN supplies r ON r.id = tr.supply_id WHERE tr.task_id = ?");
-        $stMat     = $db->prepare("SELECT r.id, r.name FROM task_materials tr JOIN materials r ON r.id = tr.material_id WHERE tr.task_id = ?");
-        $stEquip   = $db->prepare("SELECT r.id, r.name FROM task_equipment tr JOIN equipment r ON r.id = tr.equipment_id WHERE tr.task_id = ?");
+        $stTools   = $db->prepare("SELECT r.id, r.name, r.nickname FROM task_tools tr JOIN tools r ON r.id = tr.tool_id WHERE tr.task_id = ?");
+        $stSupp    = $db->prepare("SELECT r.id, r.name, r.nickname FROM task_supplies tr JOIN supplies r ON r.id = tr.supply_id WHERE tr.task_id = ?");
+        $stMat     = $db->prepare("SELECT r.id, r.name, r.nickname FROM task_materials tr JOIN materials r ON r.id = tr.material_id WHERE tr.task_id = ?");
+        $stEquip   = $db->prepare("SELECT r.id, r.name, r.nickname FROM task_equipment tr JOIN equipment r ON r.id = tr.equipment_id WHERE tr.task_id = ?");
         $stRooms   = $db->prepare("SELECT rm.id, rm.name FROM task_rooms tr JOIN rooms rm ON rm.id = tr.room_id WHERE tr.task_id = ?");
         $stWorkers = $db->prepare("SELECT u.id, u.name FROM task_preferred_workers tpw JOIN users u ON u.id = tpw.user_id WHERE tpw.task_id = ?");
         foreach ($tasks as &$task) {
@@ -624,10 +624,10 @@ switch ($action) {
         $stSubGroupName = $db->prepare("SELECT name FROM task_groups WHERE id = ?");
 
         // Resource lookups per task
-        $stResSupplies  = $db->prepare("SELECT s.name FROM task_supplies ts JOIN supplies s ON s.id = ts.supply_id WHERE ts.task_id = ?");
-        $stResTools     = $db->prepare("SELECT t.name FROM task_tools tt JOIN tools t ON t.id = tt.tool_id WHERE tt.task_id = ?");
-        $stResMaterials = $db->prepare("SELECT m.name FROM task_materials tm JOIN materials m ON m.id = tm.material_id WHERE tm.task_id = ?");
-        $stResEquipment = $db->prepare("SELECT e.name FROM task_equipment te JOIN equipment e ON e.id = te.equipment_id WHERE te.task_id = ?");
+        $stResSupplies  = $db->prepare("SELECT COALESCE(s.nickname, s.name) AS name FROM task_supplies ts JOIN supplies s ON s.id = ts.supply_id WHERE ts.task_id = ?");
+        $stResTools     = $db->prepare("SELECT COALESCE(t.nickname, t.name) AS name FROM task_tools tt JOIN tools t ON t.id = tt.tool_id WHERE tt.task_id = ?");
+        $stResMaterials = $db->prepare("SELECT COALESCE(m.nickname, m.name) AS name FROM task_materials tm JOIN materials m ON m.id = tm.material_id WHERE tm.task_id = ?");
+        $stResEquipment = $db->prepare("SELECT COALESCE(e.nickname, e.name) AS name FROM task_equipment te JOIN equipment e ON e.id = te.equipment_id WHERE te.task_id = ?");
         $resCache = []; // cache by task_id
 
         foreach ($assignments as &$a) {
@@ -798,10 +798,10 @@ switch ($action) {
         $tasks = $stmt->fetchAll();
 
         // Load resources, rooms, workers for each task
-        $stTools   = $db->prepare("SELECT r.id, r.name FROM task_tools tr JOIN tools r ON r.id = tr.tool_id WHERE tr.task_id = ?");
-        $stSupp    = $db->prepare("SELECT r.id, r.name FROM task_supplies tr JOIN supplies r ON r.id = tr.supply_id WHERE tr.task_id = ?");
-        $stMat     = $db->prepare("SELECT r.id, r.name FROM task_materials tr JOIN materials r ON r.id = tr.material_id WHERE tr.task_id = ?");
-        $stEquip   = $db->prepare("SELECT r.id, r.name FROM task_equipment tr JOIN equipment r ON r.id = tr.equipment_id WHERE tr.task_id = ?");
+        $stTools   = $db->prepare("SELECT r.id, r.name, r.nickname FROM task_tools tr JOIN tools r ON r.id = tr.tool_id WHERE tr.task_id = ?");
+        $stSupp    = $db->prepare("SELECT r.id, r.name, r.nickname FROM task_supplies tr JOIN supplies r ON r.id = tr.supply_id WHERE tr.task_id = ?");
+        $stMat     = $db->prepare("SELECT r.id, r.name, r.nickname FROM task_materials tr JOIN materials r ON r.id = tr.material_id WHERE tr.task_id = ?");
+        $stEquip   = $db->prepare("SELECT r.id, r.name, r.nickname FROM task_equipment tr JOIN equipment r ON r.id = tr.equipment_id WHERE tr.task_id = ?");
         $stRooms   = $db->prepare("SELECT rm.id, rm.name FROM task_rooms tr JOIN rooms rm ON rm.id = tr.room_id WHERE tr.task_id = ?");
         $stWorkers = $db->prepare("SELECT u.id, u.name FROM task_preferred_workers tpw JOIN users u ON u.id = tpw.user_id WHERE tpw.task_id = ?");
         foreach ($tasks as &$task) {

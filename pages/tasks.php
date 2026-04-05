@@ -759,10 +759,10 @@ function openEditor(mode = null, id = null) {
 
             if (mode === 'task') {
                 document.getElementById('e-reusable').checked = data.reusable == 1;
-                resourceState.tools      = (data.tools || []).map(r => ({id: r.id, name: r.name}));
-                resourceState.supplies   = (data.supplies || []).map(r => ({id: r.id, name: r.name}));
-                resourceState.materials  = (data.materials || []).map(r => ({id: r.id, name: r.name}));
-                resourceState.equipment  = (data.equipment || []).map(r => ({id: r.id, name: r.name}));
+                resourceState.tools      = (data.tools || []).map(r => ({id: r.id, name: r.name, nickname: r.nickname}));
+                resourceState.supplies   = (data.supplies || []).map(r => ({id: r.id, name: r.name, nickname: r.nickname}));
+                resourceState.materials  = (data.materials || []).map(r => ({id: r.id, name: r.name, nickname: r.nickname}));
+                resourceState.equipment  = (data.equipment || []).map(r => ({id: r.id, name: r.name, nickname: r.nickname}));
                 renderResourceChips('tools');
                 renderResourceChips('supplies');
                 renderResourceChips('materials');
@@ -1631,7 +1631,8 @@ function renderResourceChips(type) {
     const container = document.getElementById(`e-${type}-chips`);
     container.innerHTML = resourceState[type].map(r => {
         if (r.id === _MULTI_) return `<span class="chip" style="background:#fef3c7;color:#92400e;font-style:italic;">Multiple</span>`;
-        return `<span class="chip">${esc(r.name)}<span class="x" onclick="removeResource('${type}',${r.id})">&times;</span></span>`;
+        const display = r.nickname || r.name;
+        return `<span class="chip" title="${esc(r.name)}">${esc(display)}<span class="x" onclick="removeResource('${type}',${r.id})">&times;</span></span>`;
     }).join('');
 }
 
@@ -1680,7 +1681,7 @@ function searchResource(type, q) {
         filtered.forEach(item => {
             const opt = document.createElement('div');
             opt.className = 'combo-opt';
-            opt.textContent = item.name;
+            opt.textContent = item.nickname ? item.nickname + ' (' + item.name + ')' : item.name;
             opt.onmousedown = e => { e.preventDefault(); addResource(type, item); };
             dd.appendChild(opt);
         });

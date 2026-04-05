@@ -307,6 +307,11 @@ html, body {
     overflow: hidden; transition: border-color .15s, opacity .2s;
 }
 .task-card.completed { opacity: .55; }
+.task-card.single-task .group-title { transition: color .15s; }
+.task-card.single-task.completed .group-title { text-decoration: line-through; color: #9ca3af; }
+.single-task-check {
+    width: 20px; height: 20px; accent-color: #2563eb; flex-shrink: 0; cursor: pointer;
+}
 .task-card-hdr {
     display: flex; align-items: center; gap: 10px;
     padding: 14px 16px; cursor: pointer;
@@ -1222,15 +1227,42 @@ function renderDefaultView() {
 
         const deadlineHtml = (SCHED_MODE !== 'none' && a.deadline) ? fmtDeadline(a.deadline) : '';
         const timeHtml = SCHED_MODE !== 'none' ? `<div class="time-badge">${a.estimated_minutes} min</div>` : '';
+
+        const card = document.createElement('div');
+        card.id = 'assignment-' + a.id;
+
+        // ── Single task: flat card with checkbox, no expand ──
+        if (a.hierarchy_type === 'task' && checklist.length === 1) {
+            const c = checklist[0];
+            taskDetailCache[a.id + '_' + c.task_id] = c;
+            card.className = 'task-card single-task' + (isComplete ? ' completed' : '');
+            card.innerHTML = `
+                <div class="task-card-hdr single-task-hdr">
+                    <input type="checkbox" class="single-task-check" ${c.completed == 1 ? 'checked' : ''}
+                           onchange="toggleCheck(${a.id}, ${c.task_id}, this.checked)">
+                    <div style="flex:1;min-width:0;cursor:pointer;" onclick="openTaskDetail(${a.id}, ${c.task_id})">
+                        <div class="group-title">${esc(a.group_name)}</div>
+                        <div class="room-label">${esc(a.room_name)} &middot; ${esc(a.building_name)}</div>
+                        ${deadlineHtml}
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="type-badge">${esc(a.type_name)}</div>
+                        ${timeHtml}
+                    </div>
+                </div>
+            `;
+            list.appendChild(card);
+            return;
+        }
+
+        // ── Group / multi-task: expandable card ──
         let bodyHtml = buildSubGroupBody(a.id, checklist);
 
         if (!checklist.length) {
             bodyHtml = '<div style="font-size:13px;color:#9ca3af;padding:12px 0;">No checklist items</div>';
         }
 
-        const card = document.createElement('div');
         card.className = 'task-card' + (isComplete ? ' completed' : '');
-        card.id = 'assignment-' + a.id;
         card.innerHTML = `
             <div class="task-card-hdr" onclick="toggleCard(${a.id})">
                 <svg class="expand-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">

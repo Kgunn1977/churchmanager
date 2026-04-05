@@ -86,6 +86,10 @@ $db = getDB();
             <label>Name *</label>
             <input id="modal-name" type="text" placeholder="">
         </div>
+        <div style="margin-bottom:12px;">
+            <label>Nickname</label>
+            <input id="modal-nickname" type="text" placeholder="Short display name (optional)" maxlength="100">
+        </div>
         <div style="margin-bottom:4px;">
             <label>Quantity</label>
             <input id="modal-qty" type="number" min="1" value="1">
@@ -145,7 +149,7 @@ function render() {
     let html = '<div class="cat-hdr-row"><span>Name</span><span style="text-align:center;">Qty</span><span></span></div>';
     html += items.map(i => `
         <div class="cat-row">
-            <span class="cat-row-name">${esc(i.name)}</span>
+            <span class="cat-row-name">${esc(i.name)}${i.nickname ? '<span style="font-weight:400;color:#6b7280;font-size:12px;margin-left:6px;">(' + esc(i.nickname) + ')</span>' : ''}</span>
             <span class="cat-row-qty">${i.quantity}</span>
             <div class="cat-row-actions">
                 <button class="edit-btn" onclick="openModal(${i.id})">Edit</button>
@@ -163,6 +167,7 @@ function openModal(id) {
     document.getElementById('modal-title').textContent = item ? 'Edit ' + typeName : 'Add ' + typeName;
     document.getElementById('modal-id').value = item ? item.id : '';
     document.getElementById('modal-name').value = item ? item.name : '';
+    document.getElementById('modal-nickname').value = item ? (item.nickname || '') : '';
     document.getElementById('modal-qty').value = item ? item.quantity : 1;
     document.getElementById('modal-del').textContent = 'Delete ' + typeName;
     document.getElementById('modal-del').style.display = item ? 'block' : 'none';
@@ -174,14 +179,15 @@ function openModal(id) {
 function closeModal() { document.getElementById('catModal').style.display = 'none'; }
 
 async function saveItem() {
-    const id   = document.getElementById('modal-id').value;
-    const name = document.getElementById('modal-name').value.trim();
-    const qty  = parseInt(document.getElementById('modal-qty').value) || 1;
+    const id       = document.getElementById('modal-id').value;
+    const name     = document.getElementById('modal-name').value.trim();
+    const nickname = document.getElementById('modal-nickname').value.trim();
+    const qty      = parseInt(document.getElementById('modal-qty').value) || 1;
     if (!name) { document.getElementById('modal-name').focus(); return; }
     if (id) {
-        await apiPost('update', { id: parseInt(id), name, quantity: qty });
+        await apiPost('update', { id: parseInt(id), name, nickname, quantity: qty });
     } else {
-        await apiPost('add', { name, quantity: qty });
+        await apiPost('add', { name, nickname, quantity: qty });
     }
     closeModal();
     load();
