@@ -546,8 +546,8 @@ html, body {
             <span id="collapseLabel">Collapse</span>
         </button>
         <button id="btnShowHidden" onclick="toggleShowHidden()">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-            <span id="btnShowHiddenLabel">Hide</span>
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/><rect x="3" y="3" width="18" height="18" rx="3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span id="btnShowHiddenLabel">Show</span>
         </button>
     </div>
 
@@ -1092,7 +1092,7 @@ function toggleShowHidden() {
     const state = getOpenState();
     showHidden = !showHidden;
     document.getElementById('btnShowHidden').classList.toggle('active', showHidden);
-    document.getElementById('btnShowHiddenLabel').textContent = showHidden ? 'Show' : 'Hide';
+    document.getElementById('btnShowHiddenLabel').textContent = showHidden ? 'Hide' : 'Show';
     renderList();
     restoreOpenState(state);
 }
@@ -1589,8 +1589,10 @@ function toggleSubGroup(el) {
 function toggleCheck(assignmentId, taskId, checked) {
     // Optimistic UI update — find the item (may be in default, rooms, or task view card)
     let card, item;
+    let isSingleTask = false;
     if (viewMode === 'default') {
         card = document.getElementById('assignment-' + assignmentId);
+        isSingleTask = card && card.classList.contains('single-task');
         item = card ? card.querySelector(`.check-item[data-task-id="${taskId}"]`) : null;
     } else {
         // In rooms/task views, find the item by both assignment-id and task-id
@@ -1602,8 +1604,27 @@ function toggleCheck(assignmentId, taskId, checked) {
         item.querySelector('input[type=checkbox]').checked = checked;
         item.classList.toggle('done', checked);
     }
+    // Single-task card: update card state directly
+    if (isSingleTask && card) {
+        card.classList.toggle('completed', checked);
+        const cb = card.querySelector('.single-task-check');
+        if (cb) cb.checked = checked;
+    }
     updateCardCounts(card);
     updateSummary();
+
+    // Single-task card: hide on check, show on uncheck
+    if (isSingleTask && card) {
+        if (checked && !showHidden) {
+            setTimeout(() => {
+                card.classList.add('hiding');
+                setTimeout(() => { card.style.display = 'none'; }, 300);
+            }, 200);
+        } else if (!checked) {
+            card.style.display = '';
+            card.classList.remove('hiding', 'completed');
+        }
+    }
 
     // Auto-hide checked item and handle subgroup/card completion
     if (checked && item && !showHidden) {
