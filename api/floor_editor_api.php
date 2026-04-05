@@ -41,6 +41,31 @@ switch ($action) {
             $r['is_storage']    = (int)($r['is_storage'] ?? 0);
             $r['is_virtual']    = (int)($r['is_virtual'] ?? 0);
             $r['h_link_combination_id'] = $r['h_link_combination_id'] ? (int)$r['h_link_combination_id'] : null;
+            $r['linked_member_room_ids'] = null;
+
+            // For virtual rooms, look up member room IDs so renderers can highlight them individually
+            if ((int)$r['is_virtual'] === 1) {
+                $memberIds = [];
+                // H-Link: virtual room → h_link_combinations → h_link_combination_rooms
+                if ($r['h_link_combination_id']) {
+                    $mStmt = $db->prepare("SELECT room_id FROM h_link_combination_rooms WHERE combination_id = ?");
+                    $mStmt->execute([$r['h_link_combination_id']]);
+                    $memberIds = array_map('intval', array_column($mStmt->fetchAll(), 'room_id'));
+                }
+                // V-Link: virtual room → room_links.virtual_room_id → room_link_members
+                if (empty($memberIds)) {
+                    $mStmt = $db->prepare("
+                        SELECT rlm.room_id FROM room_link_members rlm
+                        JOIN room_links rl ON rl.id = rlm.link_id
+                        WHERE rl.virtual_room_id = ?
+                    ");
+                    $mStmt->execute([$r['id']]);
+                    $memberIds = array_map('intval', array_column($mStmt->fetchAll(), 'room_id'));
+                }
+                if (!empty($memberIds)) {
+                    $r['linked_member_room_ids'] = $memberIds;
+                }
+            }
         }
         echo json_encode($rows);
         break;

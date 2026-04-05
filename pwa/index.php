@@ -960,9 +960,21 @@ function renderFloorMapSVG(wrap, rooms, highlightRoomId) {
         return;
     }
 
-    // Calculate bounding box across all rooms
+    // If the highlighted room is virtual (H-link or V-link), highlight its member rooms instead
+    let highlightIds = new Set();
+    const highlightRoom = rooms.find(r => r.id == highlightRoomId);
+    if (highlightRoom && highlightRoom.is_virtual && highlightRoom.linked_member_room_ids && highlightRoom.linked_member_room_ids.length) {
+        highlightRoom.linked_member_room_ids.forEach(id => highlightIds.add(id));
+    } else {
+        highlightIds.add(Number(highlightRoomId));
+    }
+
+    // Skip virtual rooms from rendering (their polygons are convex hull approximations)
+    const visible = mapped.filter(r => !r.is_virtual);
+
+    // Calculate bounding box across all visible rooms
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    mapped.forEach(r => {
+    visible.forEach(r => {
         r.map_points.forEach(([x, y]) => {
             if (x < minX) minX = x;
             if (y < minY) minY = y;
@@ -982,8 +994,8 @@ function renderFloorMapSVG(wrap, rooms, highlightRoomId) {
     svg.setAttribute('width', '100%');
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-    mapped.forEach(room => {
-        const isHighlight = room.id == highlightRoomId;
+    visible.forEach(room => {
+        const isHighlight = highlightIds.has(room.id);
         const pts = room.map_points.map(([x, y]) => `${x},${y}`).join(' ');
 
         const poly = document.createElementNS(ns, 'polygon');
