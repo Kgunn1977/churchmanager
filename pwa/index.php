@@ -1623,6 +1623,7 @@ function toggleCheck(assignmentId, taskId, checked) {
         } else if (!checked) {
             card.style.display = '';
             card.classList.remove('hiding', 'completed');
+            document.getElementById('emptyState').style.display = 'none';
         }
     }
 
@@ -1775,6 +1776,11 @@ function updateSummary() {
     document.querySelectorAll('.check-item').forEach(el => {
         total++;
         if (el.classList.contains('done')) completed++;
+    });
+    // Count single-task cards (no .check-item inside)
+    document.querySelectorAll('.task-card.single-task').forEach(card => {
+        total++;
+        if (card.querySelector('.single-task-check:checked')) completed++;
     });
     const pending = total - completed;
     const pct = total > 0 ? Math.round(completed / total * 100) : 0;
