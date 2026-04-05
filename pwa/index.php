@@ -1610,8 +1610,21 @@ function toggleCheck(assignmentId, taskId, checked) {
         const cb = card.querySelector('.single-task-check');
         if (cb) cb.checked = checked;
     }
+
+    // Update in-memory assignments array BEFORE summary so counts are correct
+    assignments.forEach(a => {
+        if (a.id === assignmentId && a.checklist) {
+            a.checklist.forEach(c => {
+                if (c.task_id === taskId) c.completed = checked ? 1 : 0;
+            });
+            const doneAll = a.checklist.every(c => c.completed == 1);
+            if (doneAll) a.status = 'completed';
+            else a.status = a.checklist.some(c => c.completed == 1) ? 'in_progress' : 'pending';
+        }
+    });
+
     updateCardCounts(card);
-    updateSummary();
+    renderSummary();
 
     // Single-task card: hide on check, show on uncheck
     if (isSingleTask && card) {
@@ -1696,18 +1709,6 @@ function toggleCheck(assignmentId, taskId, checked) {
         }, 100);
     }
 
-    // Update in-memory assignments array (so view switches reflect correct state)
-    assignments.forEach(a => {
-        if (a.id === assignmentId && a.checklist) {
-            a.checklist.forEach(c => {
-                if (c.task_id === taskId) c.completed = checked ? 1 : 0;
-            });
-            const doneAll = a.checklist.every(c => c.completed == 1);
-            if (doneAll) a.status = 'completed';
-            else a.status = a.checklist.some(c => c.completed == 1) ? 'in_progress' : 'pending';
-        }
-    });
-
     // Also update local cache
     updateLocalCache(assignmentId, taskId, checked);
 
@@ -1769,39 +1770,6 @@ function updateCardCounts(card) {
     } else {
         card.classList.remove('completed');
     }
-}
-
-function updateSummary() {
-    let total = 0, completed = 0;
-    document.querySelectorAll('.check-item').forEach(el => {
-        total++;
-        if (el.classList.contains('done')) completed++;
-    });
-    // Count single-task cards (no .check-item inside)
-    document.querySelectorAll('.task-card.single-task').forEach(card => {
-        total++;
-        if (card.querySelector('.single-task-check:checked')) completed++;
-    });
-    const pending = total - completed;
-    const pct = total > 0 ? Math.round(completed / total * 100) : 0;
-    document.getElementById('summaryRow').innerHTML = `
-        <div class="summary-card">
-            <div class="summary-num">${total}</div>
-            <div class="summary-label">Tasks</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-num" style="color:#22c55e;">${completed}</div>
-            <div class="summary-label">Done</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-num" style="color:#f59e0b;">${pending}</div>
-            <div class="summary-label">Left</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-num" style="color:#3b82f6;">${pct}%</div>
-            <div class="summary-label">Progress</div>
-        </div>
-    `;
 }
 
 // ═══════════════════════════════════════════════════════════
