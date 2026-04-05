@@ -919,15 +919,18 @@ function renderSelectionDetail(el) {
                 // Tasks with their rooms as a list
                 const tasks = g.tasks || [];
                 if (tasks.length) {
-                    html += `<div style="${labelStyle}">Tasks in Group</div>`;
+                    html += `<div style="${labelStyle}; display:flex; align-items:center; justify-content:space-between;">
+                        <span>Tasks in Group</span>
+                        <button id="save-task-order-btn" onclick="saveTaskOrder(${g.id})" style="display:none; font-size:11px; font-weight:700; background:#2563eb; color:#fff; border:none; border-radius:6px; padding:3px 10px; cursor:pointer; transition:all .12s;">Save Order</button>
+                    </div>`;
+                    html += `<div id="group-task-sortable" data-group-id="${g.id}" style="margin-bottom:10px;">`;
                     tasks.forEach(t => {
-                        const roomNames = (t.rooms || []).map(r => esc(r.name)).join(', ') || '<span style="color:#d1d5db;">—</span>';
-                        html += `<div style="${rowStyle}">
-                            <span style="${taskNameStyle}">${esc(t.name)}</span>
-                            <span style="${roomNameStyle}">${roomNames}</span>
+                        html += `<div class="sortable-task-row" data-task-id="${t.id}" draggable="true" style="${rowStyle}; cursor:grab; user-select:none; border-radius:6px; padding:5px 8px; margin-bottom:2px; transition:background .1s;">
+                            <span style="color:#9ca3af; margin-right:6px; font-size:12px;">⠿</span>
+                            <span style="${taskNameStyle}; flex:1;">${esc(t.name)}</span>
                         </div>`;
                     });
-                    html += '<div style="margin-bottom:10px;"></div>';
+                    html += '</div>';
                 }
                 // Group-level rooms
                 const rooms = g.rooms || [];
@@ -1811,6 +1814,91 @@ function api(action, params = {}) {
 function postApi(fd) {
     return fetch(BASE_PATH + '/api/tasks_api.php', { method: 'POST', body: fd }).then(r => r.json());
 }
+
+// ═══════════════════════════════════════════════════════════
+// DRAG-TO-REORDER TASKS IN GROUP
+// ═══════════════════════════════════════════════════════════
+let _dragEl = null;
+
+function initSortable() {
+    const container = document.getElementById('group-task-sortable');
+    if (!container) return;
+
+    container.querySelectorAll('.sortable-task-row').forEach(row => {
+        row.addEventListener('dragstart', e => {
+            _dragEl = row;
+            row.style.opacity = '0.4';
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        row.addEventListener('dragend', () => {
+            row.style.opacity = '1';
+            _dragEl = null;
+            container.querySelectorAll('.sortable-task-row').forEach(r => {
+                r.style.borderTop = '';
+                r.style.borderBottom = '';
+            });
+        });
+        row.addEventListener('dragover', e => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (!_dragEl || _dragEl === row) return;
+            const rect = row.getBoundingClientRect();
+            const mid = rect.top + rect.height / 2;
+            container.querySelectorAll('.sortable-task-row').forEach(r => {
+                r.style.borderTop = '';
+                r.style.borderBottom = '';
+            });
+            if (e.clientY < mid) {
+                row.style.borderTop = '2px solid #3b82f6';
+            } else {
+                row.style.borderBottom = '2px solid #3b82f6';
+            }
+        });
+        row.addEventListener('drop', e => {
+            e.preventDefault();
+            if (!_dragEl || _dragEl === row) return;
+            const rect = row.getBoundingClientRect();
+            const mid = rect.top + rect.height / 2;
+            if (e.clientY < mid) {
+                container.insertBefore(_dragEl, row);
+            } else {
+                container.insertBefore(_dragEl, row.nextSibling);
+            }
+            container.querySelectorAll('.sortable-task-row').forEach(r => {
+                r.style.borderTop = '';
+                r.style.borderBottom = '';
+            });
+            // Show save button
+            const btn = document.getElementById('save-task-order-btn');
+            if (btn) btn.style.display = '';
+        });
+    });
+}
+
+async function saveTaskOrder(groupId) {
+    const container = document.getElementById('group-task-sortable');
+    if (!container) return;
+    const taskIds = [...container.querySelectorAll('.sortable-task-row')].map(r => parseInt(r.dataset.taskId));
+    const btn = document.getElementById('save-task-order-btn');
+    if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+
+    const fd = new FormData();
+    fd.append('action', 'reorder_group_tasks');
+    fd.append('group_id', groupId);
+    taskIds.forEach(id => fd.append('task_ids[]', id));
+
+    const r = await fetch(BASE_PATH + '/api/tasks_api.php', { method: 'POST', body: fd });
+    const result = await r.json();
+    if (result.error) { alert(result.error); }
+    if (btn) { btn.textContent = 'Saved!'; setTimeout(() => { btn.style.display = 'none'; btn.textContent = 'Save Order'; btn.disabled = false; }, 1200); }
+    // Reload group data so the cached order is updated
+    loadList();
+}
+
+// Re-init sortable whenever the detail panel updates
+const _detailObserver = new MutationObserver(() => { initSortable(); });
+const _detailEl = document.getElementById('editor-selection-detail');
+if (_detailEl) _detailObserver.observe(_detailEl, { childList: true, subtree: true });
 
 // ═══════════════════════════════════════════════════════════
 // INIT

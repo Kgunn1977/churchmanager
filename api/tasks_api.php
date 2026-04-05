@@ -1014,6 +1014,21 @@ switch ($action) {
         echo json_encode($result);
         break;
 
+    case 'reorder_group_tasks': {
+        $groupId = intval($_POST['group_id'] ?? 0);
+        $taskIds = array_map('intval', (array)($_POST['task_ids'] ?? []));
+        if (!$groupId || empty($taskIds)) {
+            echo json_encode(['error' => 'Missing group_id or task_ids']);
+            break;
+        }
+        $stmt = $db->prepare("UPDATE task_group_tasks SET sort_order = ? WHERE task_group_id = ? AND task_id = ?");
+        foreach ($taskIds as $i => $tid) {
+            $stmt->execute([$i, $groupId, $tid]);
+        }
+        echo json_encode(['success' => true]);
+        break;
+    }
+
     default:
         echo json_encode(['error' => 'Unknown action: ' . htmlspecialchars($action)]);
 }
