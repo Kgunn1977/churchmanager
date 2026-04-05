@@ -139,6 +139,18 @@ if (!isLoggedIn()) {
 // ── Authenticated from here on ──
 $user = getCurrentUser();
 
+// ── "View As" override for admin previewing other users ──
+$viewAsUser = null;
+if (isAdmin() && !empty($_GET['view_as'])) {
+    $viewAsId = (int)$_GET['view_as'];
+    if ($viewAsId > 0 && $viewAsId !== (int)$user['id']) {
+        $_vaDb = getDB();
+        $vaStmt = $_vaDb->prepare("SELECT id, name, email, role FROM users WHERE id = ?");
+        $vaStmt->execute([$viewAsId]);
+        $viewAsUser = $vaStmt->fetch();
+    }
+}
+
 // Load date strip settings
 $_pwaDb = getDB();
 $_pwaStripBack = 3;
@@ -423,7 +435,7 @@ html, body {
     font-size: 17px; font-weight: 800; color: #111827; margin-bottom: 4px;
 }
 .task-detail-box .td-desc {
-    font-size: 13px; color: #6b7280; margin-bottom: 12px; line-height: 1.5;
+    font-size: 13px; color: #6b7280; margin-bottom: 12px; line-height: 1.5; font-weight: 700;
 }
 .task-detail-box .td-time {
     display: inline-flex; align-items: center; gap: 4px;
@@ -453,6 +465,9 @@ html, body {
     letter-spacing: .04em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
 }
 .td-location svg { flex-shrink: 0; }
+.td-room-name {
+    font-size: 16px; font-weight: 800; color: #111827; margin-bottom: 10px;
+}
 .td-map-wrap {
     background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;
     padding: 8px; margin-bottom: 14px; overflow: hidden;
@@ -500,8 +515,8 @@ html, body {
     <!-- Top bar (position:fixed — always visible) -->
     <div class="top-bar">
         <div>
-            <div class="top-bar-title">My Tasks</div>
-            <div class="top-bar-sub"><?= htmlspecialchars($user['name']) ?></div>
+            <div class="top-bar-title"><?= $viewAsUser ? 'Viewing As' : 'My Tasks' ?></div>
+            <div class="top-bar-sub"><?= htmlspecialchars($viewAsUser ? $viewAsUser['name'] : $user['name']) ?></div>
         </div>
         <div class="top-bar-right">
             <div class="sync-indicator" id="syncDot" title="Online"></div>
@@ -572,8 +587,9 @@ html, body {
 // CONFIG
 // ═══════════════════════════════════════════════════════════
 const BASE_PATH = <?= json_encode(BASE_PATH) ?>;
-const USER_ID = <?= (int)$user['id'] ?>;
-const USER_NAME = <?= json_encode($user['name']) ?>;
+const USER_ID = <?= $viewAsUser ? (int)$viewAsUser['id'] : (int)$user['id'] ?>;
+const USER_NAME = <?= $viewAsUser ? json_encode($viewAsUser['name']) : json_encode($user['name']) ?>;
+const VIEWING_AS = <?= $viewAsUser ? 'true' : 'false' ?>;
 let selectedDate = todayStr();
 let assignments = [];
 let isOnline = navigator.onLine;
@@ -849,6 +865,7 @@ function openTaskDetail(assignmentId, taskId) {
     let floorId = c.floor_id || null;
     let floorName = c.floor_name || '';
     let buildingName = c.building_name || '';
+    let roomName = c.room_name || '';
     if (!roomId && assignmentId) {
         // Look up the specific assignment by ID
         const a = assignments.find(a => a.id == assignmentId);
@@ -857,6 +874,7 @@ function openTaskDetail(assignmentId, taskId) {
             floorId = a.floor_id;
             floorName = a.floor_name || floorName;
             buildingName = a.building_name || buildingName;
+            roomName = a.room_name || roomName;
         }
     }
 
@@ -867,6 +885,9 @@ function openTaskDetail(assignmentId, taskId) {
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             ${esc(buildingName)}${floorName ? ' — ' + esc(floorName) : ''}
         </div>`;
+    }
+    if (roomName) {
+        html += `<div class="td-room-name">${esc(roomName)}</div>`;
     }
     if (floorId && roomId) {
         html += `<div class="td-map-wrap" id="tdMapWrap"><div class="td-map-loading">Loading map…</div></div>`;

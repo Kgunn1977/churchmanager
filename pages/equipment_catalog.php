@@ -653,12 +653,17 @@ const eqPicker = new FloorPlanPicker({
     }
 });
 
-// Load linked groups
+// Load V-Link + H-Link groups for picker
 (async () => {
     try {
         const res = await fetch(BASE_PATH + '/api/room_links_api.php?action=get_links');
         const groups = await res.json();
         eqPicker.setLinkedGroups(groups);
+    } catch(e) {}
+    try {
+        const res = await fetch(BASE_PATH + '/api/h_link_api.php?action=get_groups');
+        const groups = await res.json();
+        eqPicker.setHLinkGroups(groups);
     } catch(e) {}
 })();
 

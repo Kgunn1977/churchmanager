@@ -427,7 +427,63 @@ switch ($action) {
             $rrStmt->execute([$id, $rid]);
         }
 
-        echo json_encode(['success' => true, 'id' => $id]);
+        // ── H-Link conflict: check for overlapping reservations on related rooms ──
+        $hlinkConflicts = [];
+        try {
+            // Find all H-Link related room IDs (virtual combos + member rooms)
+            $allRelated = $roomIds;
+
+            // If any booked room is a member of a combo → get virtual room IDs
+            $ph = implode(',', array_fill(0, count($roomIds), '?'));
+            $vStmt = $db->prepare("
+                SELECT DISTINCT c.virtual_room_id
+                FROM h_link_combination_rooms cr
+                JOIN h_link_combinations c ON c.id = cr.combination_id
+                WHERE cr.room_id IN ($ph) AND c.virtual_room_id IS NOT NULL
+            ");
+            $vStmt->execute($roomIds);
+            $relatedVirtual = array_map('intval', array_column($vStmt->fetchAll(), 'virtual_room_id'));
+
+            // If any booked room IS a virtual combo → get member room IDs
+            $mStmt = $db->prepare("
+                SELECT DISTINCT cr.room_id
+                FROM h_link_combinations c
+                JOIN h_link_combination_rooms cr ON cr.combination_id = c.id
+                WHERE c.virtual_room_id IN ($ph)
+            ");
+            $mStmt->execute($roomIds);
+            $relatedMembers = array_map('intval', array_column($mStmt->fetchAll(), 'room_id'));
+
+            // Combine all related IDs but exclude the ones already booked
+            $conflictCheckIds = array_values(array_unique(array_merge($relatedVirtual, $relatedMembers)));
+            $conflictCheckIds = array_diff($conflictCheckIds, $roomIds);
+
+            if (!empty($conflictCheckIds)) {
+                // Check for overlapping reservations on these related rooms
+                $ph2 = implode(',', array_fill(0, count($conflictCheckIds), '?'));
+                $cStmt = $db->prepare("
+                    SELECT r.id, r.title, r.start_datetime, r.end_datetime,
+                           GROUP_CONCAT(rr.room_id) AS conflicting_room_ids
+                    FROM reservations r
+                    JOIN reservation_rooms rr ON rr.reservation_id = r.id
+                    WHERE rr.room_id IN ($ph2)
+                      AND r.id != ?
+                      AND r.start_datetime < ?
+                      AND r.end_datetime > ?
+                    GROUP BY r.id
+                ");
+                $cStmt->execute(array_merge($conflictCheckIds, [$id, $endDt, $startDt]));
+                $hlinkConflicts = $cStmt->fetchAll();
+            }
+        } catch (Exception $e) {
+            // Don't fail the save, just skip conflict info
+        }
+
+        $response = ['success' => true, 'id' => $id];
+        if (!empty($hlinkConflicts)) {
+            $response['hlink_conflicts'] = $hlinkConflicts;
+        }
+        echo json_encode($response);
         break;
 
     // ── POST delete reservation (all instances / non-recurring) ─

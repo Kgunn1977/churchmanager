@@ -58,7 +58,10 @@ html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
     overflow: hidden;
 }
 .sched-card:hover { border-color: #93c5fd; box-shadow: 0 2px 8px rgba(37,99,235,.08); }
+.sched-card.bulk-selected { border-color: #3b82f6; background: #eff6ff; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
 .sched-card.inactive { opacity: .55; }
+.sched-card .bulk-check { width:16px; height:16px; accent-color:#2563eb; flex-shrink:0; cursor:pointer; }
+#bulk-toolbar { transition: all .2s; }
 .sched-card-hdr {
     display: flex; align-items: center; gap: 10px; padding: 14px 16px;
     cursor: pointer; user-select: none;
@@ -157,24 +160,57 @@ html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
                 <div id="cal-grid" class="grid grid-cols-7 gap-0.5"></div>
             </div>
 
-            <!-- Day detail (shows assignments for selected date) -->
-            <div id="day-detail" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 hidden">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 id="day-detail-title" class="text-sm font-bold text-gray-700"></h3>
-                    <button onclick="closeDayDetail()" class="text-gray-400 hover:text-gray-600 text-xs">Close</button>
-                </div>
-                <div id="day-detail-list" class="space-y-2 text-sm"></div>
+            <!-- ── View Toggle ────────────────────────────────── -->
+            <div class="flex items-center gap-1 mb-3 bg-gray-100 rounded-lg p-0.5" style="width:fit-content;">
+                <button id="toggle-day-view" onclick="switchView('day')" class="px-3 py-1.5 text-xs font-bold rounded-md transition bg-white text-gray-800 shadow-sm">Day View</button>
+                <button id="toggle-rule-view" onclick="switchView('rule')" class="px-3 py-1.5 text-xs font-bold rounded-md transition text-gray-500">Rule View</button>
             </div>
 
-            <!-- Schedule rules list -->
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    Schedule Rules <span id="sched-filter-label" class="text-gray-300 normal-case"></span>
-                </h3>
+            <!-- ══════════ DAY VIEW ══════════ -->
+            <div id="day-view-pane">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 id="day-view-title" class="text-sm font-bold text-gray-700"></h3>
+                    <div class="flex items-center gap-2">
+                        <select id="day-worker-filter" onchange="renderDayView()" class="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-600">
+                            <option value="">All Workers</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="day-view-list" class="space-y-2 text-sm"></div>
+                <div id="day-view-empty" class="text-center text-gray-400 text-sm py-8 hidden">
+                    No assignments for this date. Select a date on the calendar, or generate assignments.
+                </div>
             </div>
-            <div id="schedule-list"></div>
-            <div id="schedule-empty" class="text-center text-gray-400 text-sm py-8 hidden">
-                No schedules defined yet. Click "New Schedule" to create one.
+
+            <!-- ══════════ RULE VIEW ══════════ -->
+            <div id="rule-view-pane" class="hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        Schedule Rules <span id="sched-filter-label" class="text-gray-300 normal-case"></span>
+                    </h3>
+                    <div class="flex items-center gap-3">
+                        <select id="rule-worker-filter" onchange="renderSchedules()" class="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-600">
+                            <option value="">All Workers</option>
+                        </select>
+                        <label class="flex items-center gap-1 cursor-pointer text-xs text-gray-400 hover:text-gray-600">
+                            <input type="checkbox" id="bulk-mode-toggle" onchange="toggleBulkMode(this.checked)" style="width:14px;height:14px;accent-color:#2563eb;">
+                            Multi-select
+                        </label>
+                    </div>
+                </div>
+                <!-- Bulk toolbar (hidden until 2+ selected) -->
+                <div id="bulk-toolbar" class="hidden mb-3 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2">
+                    <span id="bulk-count" class="text-sm font-bold text-blue-700">0 selected</span>
+                    <div class="flex-1"></div>
+                    <button onclick="bulkSelectAll()" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Select All</button>
+                    <button onclick="bulkDeselectAll()" class="text-xs text-gray-500 hover:text-gray-700 font-medium">Deselect All</button>
+                    <button onclick="openBulkEditModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-3 py-1.5 text-xs transition">Edit Selected</button>
+                    <button onclick="bulkDeleteSchedules()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold rounded-lg px-3 py-1.5 text-xs transition">Delete Selected</button>
+                </div>
+                <div id="schedule-list"></div>
+                <div id="schedule-empty" class="text-center text-gray-400 text-sm py-8 hidden">
+                    No schedules match current filters.
+                </div>
             </div>
         </div>
     </div>
@@ -192,6 +228,10 @@ html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
             <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-gray-500">
                 <input type="checkbox" id="task-lib-show-all" onchange="renderTaskLibrary()" style="width:14px;height:14px;accent-color:#2563eb;">
                 Show non-reusable tasks
+            </label>
+            <label class="flex items-center gap-1.5 mt-1 cursor-pointer text-xs text-gray-500">
+                <input type="checkbox" id="task-lib-auto-rooms" style="width:14px;height:14px;accent-color:#2563eb;">
+                Auto-select rooms with tasks
             </label>
         </div>
         <div style="flex:1; overflow-y:auto; padding:12px 16px;">
@@ -321,6 +361,9 @@ html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
 let selectedRoomIds = new Set();
 let schedules = [];
 let calendarAssignments = [];
+let bulkSelectedIds = new Set(); // multi-select schedule IDs
+let bulkEditMode = false; // true when editing multiple schedules via single modal
+let bulkDirtyFields = new Set(); // tracks which fields user changed during bulk edit
 let lookups = { task_groups: [], tasks: [], workers: [], roles: [] };
 let calYear, calMonth; // current calendar view
 let selectedDate = null; // currently highlighted calendar day
@@ -348,6 +391,19 @@ const picker = new FloorPlanPicker({
     }
 });
 
+// Load V-Link + H-Link groups for picker
+fetch(BASE_PATH + '/api/room_links_api.php?action=get_links')
+    .then(r => r.json())
+    .then(links => picker.setLinkedGroups(links))
+    .catch(() => {});
+fetch(BASE_PATH + '/api/h_link_api.php?action=get_groups')
+    .then(r => r.json())
+    .then(groups => picker.setHLinkGroups(groups))
+    .catch(() => {});
+
+// Auto-select today
+selectedDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
 fetchLookups();
 loadCalendar();
 loadSchedules();
@@ -373,7 +429,7 @@ function updateRoomBadge() {
     } else {
         badge.classList.add('hidden');
     }
-    document.getElementById('sched-filter-label').textContent = n > 0 ? `(filtered to ${n} room${n>1?'s':''})` : '';
+    // Filter label is now updated in renderSchedules()
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -396,6 +452,7 @@ async function loadCalendar() {
     calendarAssignments = await r.json();
 
     renderCalendar();
+    if (currentView === 'day') renderDayView();
 }
 
 function renderCalendar() {
@@ -437,50 +494,207 @@ function renderCalendar() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// DAY DETAIL
+// VIEW TOGGLE (Day View / Rule View)
+// ═══════════════════════════════════════════════════════════
+let currentView = 'day'; // 'day' or 'rule'
+
+function switchView(view) {
+    currentView = view;
+    const dayBtn  = document.getElementById('toggle-day-view');
+    const ruleBtn = document.getElementById('toggle-rule-view');
+    const dayPane  = document.getElementById('day-view-pane');
+    const rulePane = document.getElementById('rule-view-pane');
+
+    if (view === 'day') {
+        dayBtn.className  = 'px-3 py-1.5 text-xs font-bold rounded-md transition bg-white text-gray-800 shadow-sm';
+        ruleBtn.className = 'px-3 py-1.5 text-xs font-bold rounded-md transition text-gray-500';
+        dayPane.classList.remove('hidden');
+        rulePane.classList.add('hidden');
+        renderDayView();
+    } else {
+        ruleBtn.className = 'px-3 py-1.5 text-xs font-bold rounded-md transition bg-white text-gray-800 shadow-sm';
+        dayBtn.className  = 'px-3 py-1.5 text-xs font-bold rounded-md transition text-gray-500';
+        rulePane.classList.remove('hidden');
+        dayPane.classList.add('hidden');
+        renderSchedules();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// DAY VIEW
 // ═══════════════════════════════════════════════════════════
 function showDayDetail(dateStr, dayNum) {
-    // Highlight the selected day
+    // Toggle: click same date to deselect
+    if (selectedDate === dateStr) {
+        selectedDate = null;
+        document.querySelectorAll('.cal-day.selected').forEach(el => el.classList.remove('selected'));
+        updateNewScheduleBtn();
+        if (currentView === 'day') renderDayView();
+        if (currentView === 'rule') renderSchedules();
+        return;
+    }
+
     selectedDate = dateStr;
     document.querySelectorAll('.cal-day.selected').forEach(el => el.classList.remove('selected'));
     const clicked = document.querySelector(`.cal-day[data-date="${dateStr}"]`);
     if (clicked) clicked.classList.add('selected');
     updateNewScheduleBtn();
 
-    const panel = document.getElementById('day-detail');
-    const list = document.getElementById('day-detail-list');
-    const title = document.getElementById('day-detail-title');
-
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    title.textContent = `${months[calMonth]} ${dayNum}, ${calYear}`;
-
-    const dayItems = calendarAssignments.filter(a => a.assigned_date === dateStr);
-    if (dayItems.length === 0) {
-        list.innerHTML = '<p class="text-gray-400">No assignments for this date.</p>';
-    } else {
-        list.innerHTML = dayItems.map(a => `
-            <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                <div>
-                    <span class="font-medium text-gray-800">${esc(a.task_group_name)}</span>
-                    <span class="text-gray-400 mx-1">·</span>
-                    <span class="text-gray-500">${esc(a.room_name)}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-gray-400 text-xs">${esc(a.worker_name || 'Unassigned')}</span>
-                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        a.status === 'completed' ? 'bg-green-100 text-green-700' :
-                        a.status === 'in_progress' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-gray-100 text-gray-500'
-                    }">${a.status}</span>
-                </div>
-            </div>
-        `).join('');
-    }
-    panel.classList.remove('hidden');
+    // Stay in current view — just re-render
+    if (currentView === 'day') renderDayView();
+    if (currentView === 'rule') renderSchedules();
 }
 
-function closeDayDetail() {
-    document.getElementById('day-detail').classList.add('hidden');
+function renderDayView() {
+    const list  = document.getElementById('day-view-list');
+    const empty = document.getElementById('day-view-empty');
+    const title = document.getElementById('day-view-title');
+
+    if (!selectedDate) {
+        title.textContent = 'Select a date';
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+
+    // Parse selected date for title
+    const [yr, mo, dy] = selectedDate.split('-').map(Number);
+    const monthsShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    title.textContent = `${monthsShort[mo-1]} ${dy}, ${yr}`;
+
+    // Filter assignments for this date
+    let dayItems = calendarAssignments.filter(a => a.assigned_date === selectedDate);
+
+    // Populate worker filter dropdown
+    const workerFilter = document.getElementById('day-worker-filter');
+    const currentFilterVal = workerFilter.value;
+    const workers = {};
+    dayItems.forEach(a => {
+        const wId = a.worker_id || '0';
+        const wName = a.worker_name || 'Unassigned';
+        if (!workers[wId]) workers[wId] = wName;
+    });
+    workerFilter.innerHTML = '<option value="">All Workers</option>';
+    Object.entries(workers).sort((a,b) => a[1].localeCompare(b[1])).forEach(([id, name]) => {
+        workerFilter.innerHTML += `<option value="${id}" ${id === currentFilterVal ? 'selected' : ''}>${esc(name)}</option>`;
+    });
+
+    // Apply worker filter
+    const filterWorker = workerFilter.value;
+    if (filterWorker) {
+        dayItems = dayItems.filter(a => String(a.worker_id || '0') === filterWorker);
+    }
+
+    if (dayItems.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+
+    // Group assignments by room for a cleaner PWA-style layout
+    const byRoom = {};
+    dayItems.forEach(a => {
+        const key = a.room_id;
+        if (!byRoom[key]) byRoom[key] = { room_name: a.room_name, room_number: a.room_number, items: [] };
+        byRoom[key].items.push(a);
+    });
+
+    list.innerHTML = Object.values(byRoom).map(room => {
+        const roomDone = room.items.filter(a => a.status === 'completed').length;
+        const roomTotal = room.items.length;
+        const allDone = roomDone === roomTotal;
+
+        return `
+        <div class="sched-card ${allDone ? 'opacity-60' : ''}" data-room-card>
+            <div class="sched-card-hdr" onclick="this.parentElement.classList.toggle('open')">
+                <svg class="sched-expand-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                <div style="flex:1;min-width:0;">
+                    <div class="font-bold text-gray-800 text-sm">${esc(room.room_name)}${room.room_number ? ' <span class="text-gray-400 font-normal">#'+esc(room.room_number)+'</span>' : ''}</div>
+                    <div class="text-xs text-gray-400 mt-0.5">${roomDone}/${roomTotal} tasks done</div>
+                </div>
+                <div class="flex items-center gap-2" style="flex-shrink:0;">
+                    ${allDone
+                        ? '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Complete</span>'
+                        : `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">${roomDone}/${roomTotal}</span>`
+                    }
+                </div>
+            </div>
+            <div class="sched-card-body" style="padding:0 16px 12px;">
+                ${room.items.map(a => `
+                    <div class="py-2 border-b border-gray-50 last:border-0" id="assign-row-${a.assignment_id}">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-5 h-5 flex items-center justify-center flex-shrink-0 rounded-full ${
+                                    a.status === 'completed' ? 'bg-green-100 text-green-600' :
+                                    a.status === 'in_progress' ? 'bg-yellow-100 text-yellow-600' :
+                                    'bg-gray-100 text-gray-400'
+                                }">
+                                    ${a.status === 'completed'
+                                        ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>'
+                                        : a.status === 'in_progress'
+                                            ? '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/></svg>'
+                                            : '<span class="w-2 h-2 rounded-full bg-gray-300"></span>'
+                                    }
+                                </span>
+                                <span class="text-sm ${a.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-700'}">${esc(a.task_group_name)}</span>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <button onclick="event.stopPropagation(); toggleAssignDetail(${a.assignment_id})" class="text-gray-400 hover:text-blue-600 transition text-xs font-medium px-1.5 py-0.5 rounded hover:bg-blue-50" title="View details">View</button>
+                                <button onclick="event.stopPropagation(); deleteAssignment(${a.assignment_id})" class="text-gray-300 hover:text-red-500 transition" title="Delete assignment">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="assign-detail-${a.assignment_id}" class="hidden mt-2 ml-7 bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-1.5">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                                <span class="font-semibold text-gray-500">Room:</span> ${esc(room.room_name)}${room.room_number ? ' #'+esc(room.room_number) : ''}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                <span class="font-semibold text-gray-500">Task:</span> ${esc(a.task_group_name)}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                <span class="font-semibold text-gray-500">Worker:</span> ${esc(a.worker_name || 'Unassigned')}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span class="font-semibold text-gray-500">Status:</span>
+                                <span class="font-semibold px-1.5 py-0.5 rounded-full ${
+                                    a.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                    a.status === 'in_progress' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-gray-100 text-gray-500'
+                                }">${a.status.replace('_', ' ')}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleAssignDetail(id) {
+    const el = document.getElementById('assign-detail-' + id);
+    if (el) el.classList.toggle('hidden');
+}
+
+async function deleteAssignment(id) {
+    if (!confirm('Delete this assignment?')) return;
+    const r = await fetch(BASE_PATH + '/api/scheduling_api.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: 'delete_assignment', id })
+    });
+    const result = await r.json();
+    if (result.error) { alert(result.error); return; }
+    // Remove from local data and re-render
+    calendarAssignments = calendarAssignments.filter(a => a.assignment_id != id);
+    renderDayView();
+    // Refresh calendar to update dot indicators
+    loadCalendar();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -526,14 +740,93 @@ function renderSchedules() {
     const container = document.getElementById('schedule-list');
     const empty = document.getElementById('schedule-empty');
 
-    if (schedules.length === 0) {
+    // Populate rule worker filter dropdown
+    const ruleWorkerFilter = document.getElementById('rule-worker-filter');
+    const ruleWorkerVal = ruleWorkerFilter.value;
+    const ruleWorkers = {};
+    schedules.forEach(s => {
+        if (s.assign_to_type === 'user' && s.assign_to_user_id) {
+            ruleWorkers[s.assign_to_user_id] = s.assigned_user_name || 'Unknown';
+        } else if (s.assign_to_type === 'role') {
+            ruleWorkers['role:' + s.assign_to_role] = s.assign_to_role + ' (role)';
+        } else {
+            ruleWorkers['0'] = 'Unassigned';
+        }
+    });
+    ruleWorkerFilter.innerHTML = '<option value="">All Workers</option>';
+    Object.entries(ruleWorkers).sort((a,b) => a[1].localeCompare(b[1])).forEach(([id, name]) => {
+        ruleWorkerFilter.innerHTML += `<option value="${id}" ${id === ruleWorkerVal ? 'selected' : ''}>${esc(name)}</option>`;
+    });
+
+    // Apply filters: task library + calendar date + worker
+    let filtered = schedules;
+
+    // Filter by worker
+    const ruleFilterWorker = ruleWorkerFilter.value;
+    if (ruleFilterWorker) {
+        filtered = filtered.filter(s => {
+            if (ruleFilterWorker.startsWith('role:')) {
+                return s.assign_to_type === 'role' && s.assign_to_role === ruleFilterWorker.replace('role:', '');
+            } else if (ruleFilterWorker === '0') {
+                return !s.assign_to_user_id && s.assign_to_type !== 'role';
+            } else {
+                return String(s.assign_to_user_id) === ruleFilterWorker;
+            }
+        });
+    }
+
+    // Filter by task library selections
+    if (libSelectedGroups.size > 0 || libSelectedTasks.size > 0) {
+        filtered = filtered.filter(s => {
+            const sGroupIds = (s.task_groups || []).map(tg => tg.id);
+            const sTaskIds  = (s.tasks || []).map(t => t.id);
+            const matchesGroup = sGroupIds.some(id => libSelectedGroups.has(id));
+            const matchesTask  = sTaskIds.some(id => libSelectedTasks.has(id));
+            return matchesGroup || matchesTask;
+        });
+    }
+
+    // Filter by selected calendar date (match rules whose frequency covers that day)
+    if (selectedDate) {
+        const dt = new Date(selectedDate + 'T12:00:00');
+        const jsDay = dt.getDay(); // 0=Sun..6=Sat
+        const isoDay = jsDay === 0 ? 7 : jsDay; // 1=Mon..7=Sun
+        const dayOfMonth = dt.getDate();
+        const month = dt.getMonth() + 1;
+
+        filtered = filtered.filter(s => {
+            const cfg = s.frequency_config || {};
+            switch (s.frequency) {
+                case 'daily': return true;
+                case 'weekdays': return isoDay >= 1 && isoDay <= 5;
+                case 'specific_days': return (cfg.days || []).includes(isoDay);
+                case 'weekly': return (cfg.day_of_week || 1) === isoDay;
+                case 'biweekly': return (cfg.day_of_week || 1) === isoDay; // approximate — can't know week parity
+                case 'monthly': return (cfg.day_of_month || 1) === dayOfMonth;
+                case 'yearly': return (cfg.month || 1) === month && (cfg.day || 1) === dayOfMonth;
+                default: return true;
+            }
+        });
+    }
+
+    // Update filter label
+    const filterParts = [];
+    if (selectedRoomIds.size > 0) filterParts.push(`${selectedRoomIds.size} room${selectedRoomIds.size>1?'s':''}`);
+    if (libSelectedGroups.size > 0 || libSelectedTasks.size > 0) {
+        const n = libSelectedGroups.size + libSelectedTasks.size;
+        filterParts.push(`${n} task${n>1?'s':''}`);
+    }
+    if (selectedDate) filterParts.push(selectedDate);
+    document.getElementById('sched-filter-label').textContent = filterParts.length > 0 ? `(${filterParts.join(', ')})` : '';
+
+    if (filtered.length === 0) {
         container.innerHTML = '';
         empty.classList.remove('hidden');
         return;
     }
     empty.classList.add('hidden');
 
-    container.innerHTML = schedules.map(s => {
+    container.innerHTML = filtered.map(s => {
         const detail = freqDetail(s);
         const roomNames = (s.rooms || []).map(r => esc(r.name)).join(', ');
         const tgNames = (s.task_groups || []).map(t => esc(t.name)).join(', ');
@@ -553,9 +846,11 @@ function renderSchedules() {
         const tgIds = (s.task_groups || []).map(tg => tg.id).join(',');
         const tIds  = (s.tasks || []).map(t => t.id).join(',');
 
+        const bulkOn = document.getElementById('bulk-mode-toggle')?.checked;
         return `
-        <div class="sched-card ${s.is_active ? '' : 'inactive'}" data-sched-id="${s.id}" data-tg-ids="${tgIds}" data-t-ids="${tIds}">
+        <div class="sched-card ${s.is_active ? '' : 'inactive'} ${bulkSelectedIds.has(s.id) ? 'bulk-selected' : ''}" data-sched-id="${s.id}" data-tg-ids="${tgIds}" data-t-ids="${tIds}">
             <div class="sched-card-hdr" onclick="${expandable ? `toggleSchedCard(this.parentElement)` : `editSchedule(${s.id})`}">
+                <input type="checkbox" class="bulk-check ${bulkOn ? '' : 'hidden'}" ${bulkSelectedIds.has(s.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleBulkSelect(${s.id}, this.checked)">
                 ${chevron}
                 <div style="flex:1;min-width:0;">
                     <div class="font-bold text-gray-800 text-sm" style="line-height:1.3;">${allTaskNames || '<em class="text-gray-400">No tasks</em>'}</div>
@@ -710,34 +1005,44 @@ function renderTaskLibrary() {
     updateLibSummary();
 }
 
+function isAutoRoomsEnabled() {
+    return document.getElementById('task-lib-auto-rooms')?.checked ?? true;
+}
+
 function toggleLibGroup(id, checked) {
     if (checked) {
         libSelectedGroups.add(id);
         // Auto-select rooms associated with this task group
-        const tg = lookups.task_groups.find(g => g.id == id);
-        if (tg && tg.room_ids && tg.room_ids.length > 0) {
-            autoSelectRooms(tg.room_ids);
+        if (isAutoRoomsEnabled()) {
+            const tg = lookups.task_groups.find(g => g.id == id);
+            if (tg && tg.room_ids && tg.room_ids.length > 0) {
+                autoSelectRooms(tg.room_ids);
+            }
         }
     } else {
         libSelectedGroups.delete(id);
     }
     updateLibSummary();
     updateNewScheduleBtn();
+    if (currentView === 'rule') renderSchedules();
 }
 
 function toggleLibTask(id, checked) {
     if (checked) {
         libSelectedTasks.add(id);
         // Auto-select rooms associated with this task
-        const t = (lookups.tasks || []).find(t => t.id == id);
-        if (t && t.room_ids && t.room_ids.length > 0) {
-            autoSelectRooms(t.room_ids);
+        if (isAutoRoomsEnabled()) {
+            const t = (lookups.tasks || []).find(t => t.id == id);
+            if (t && t.room_ids && t.room_ids.length > 0) {
+                autoSelectRooms(t.room_ids);
+            }
         }
     } else {
         libSelectedTasks.delete(id);
     }
     updateLibSummary();
     updateNewScheduleBtn();
+    if (currentView === 'rule') renderSchedules();
 }
 
 function autoSelectRooms(roomIds) {
@@ -775,6 +1080,7 @@ function deselectAllLibrary() {
     document.querySelectorAll('.lib-tg-check, .lib-task-check').forEach(cb => cb.checked = false);
     updateLibSummary();
     updateNewScheduleBtn();
+    if (currentView === 'rule') renderSchedules();
 }
 
 function filterTaskLibrary() {
@@ -868,8 +1174,80 @@ function tryOpenScheduleModal() {
 
 function openScheduleModal(data) {
     document.getElementById('sched-modal').classList.remove('hidden');
+
+    if (bulkEditMode) {
+        // ── Bulk edit: all fields blank, only apply what user changes ──
+        const n = bulkSelectedIds.size;
+        document.getElementById('sched-modal-title').textContent = `Edit ${n} Schedule${n > 1 ? 's' : ''}`;
+        document.getElementById('sched-delete-btn').classList.add('hidden');
+        document.getElementById('sf-id').value = 0;
+
+        // Track which fields are touched
+        bulkDirtyFields = new Set();
+
+        // Frequency — add "No change" placeholder
+        const sel = document.getElementById('sf-frequency');
+        if (!sel.querySelector('option[value="__nochange__"]')) {
+            const opt = document.createElement('option');
+            opt.value = '__nochange__';
+            opt.textContent = '— No change —';
+            sel.insertBefore(opt, sel.firstChild);
+        }
+        sel.value = '__nochange__';
+        sel.addEventListener('change', () => bulkDirtyFields.add('frequency'), { once: false });
+
+        // Frequency config — hide
+        document.getElementById('sf-freq-config').innerHTML = '';
+        document.getElementById('sf-freq-config').classList.add('hidden');
+
+        // Assignment — blank
+        document.querySelectorAll('[name="sf-assign-type"]').forEach(r => {
+            r.checked = r.value === 'user';
+            r.addEventListener('change', () => bulkDirtyFields.add('assign'));
+        });
+        handleAssignTypeChange();
+        const userSel = document.getElementById('sf-assign-user');
+        userSel.value = '';
+        userSel.addEventListener('change', () => bulkDirtyFields.add('assign'));
+        const roleSel = document.getElementById('sf-assign-role');
+        roleSel.value = 'custodial';
+        roleSel.addEventListener('change', () => bulkDirtyFields.add('assign'));
+
+        // Deadline — blank
+        const deadlineEl = document.getElementById('sf-deadline');
+        deadlineEl.value = '';
+        deadlineEl.addEventListener('change', () => bulkDirtyFields.add('deadline'));
+
+        // Active — checked by default, track
+        const activeEl = document.getElementById('sf-active');
+        activeEl.checked = true;
+        activeEl.addEventListener('change', () => bulkDirtyFields.add('active'));
+
+        // Task groups — all unchecked
+        document.querySelectorAll('.tg-check').forEach(cb => {
+            cb.checked = false;
+            cb.indeterminate = false;
+            cb.addEventListener('change', () => bulkDirtyFields.add('tasks'));
+        });
+
+        // Individual tasks — all unchecked
+        document.querySelectorAll('.task-check').forEach(cb => {
+            cb.checked = false;
+            cb.indeterminate = false;
+            cb.addEventListener('change', () => bulkDirtyFields.add('tasks'));
+        });
+
+        updateModalRooms();
+        return;
+    }
+
+    // ── Single edit / new ──
     document.getElementById('sched-modal-title').textContent = data ? 'Edit Schedule' : 'New Schedule';
     document.getElementById('sched-delete-btn').classList.toggle('hidden', !data);
+
+    // Remove "Multiple" option if it exists from a prior bulk edit
+    const multiOpt = document.getElementById('sf-frequency').querySelector('option[value="__multiple__"]');
+    if (multiOpt) multiOpt.remove();
 
     // Reset
     document.getElementById('sf-id').value = data ? data.id : 0;
@@ -886,6 +1264,7 @@ function openScheduleModal(data) {
 
     // Task groups — from editing data OR from library selection
     document.querySelectorAll('.tg-check').forEach(cb => {
+        cb.indeterminate = false;
         if (data) {
             cb.checked = (data.task_groups || []).some(tg => tg.id == cb.value);
         } else {
@@ -895,6 +1274,7 @@ function openScheduleModal(data) {
 
     // Individual tasks — from editing data OR from library selection
     document.querySelectorAll('.task-check').forEach(cb => {
+        cb.indeterminate = false;
         if (data) {
             cb.checked = (data.tasks || []).some(t => t.id == cb.value);
         } else {
@@ -914,6 +1294,13 @@ function openScheduleModal(data) {
 
 function closeScheduleModal() {
     document.getElementById('sched-modal').classList.add('hidden');
+    bulkEditMode = false;
+    bulkDirtyFields = new Set();
+    // Remove temporary placeholder options if present
+    const multiOpt = document.getElementById('sf-frequency').querySelector('option[value="__multiple__"]');
+    if (multiOpt) multiOpt.remove();
+    const noChangeOpt = document.getElementById('sf-frequency').querySelector('option[value="__nochange__"]');
+    if (noChangeOpt) noChangeOpt.remove();
 }
 
 function updateModalRooms() {
@@ -1020,31 +1407,84 @@ async function saveSchedule() {
     const freq = document.getElementById('sf-frequency').value;
     let freqConfig = null;
 
-    switch (freq) {
-        case 'specific_days':
-            freqConfig = { days: [...document.querySelectorAll('.dow-check:checked')].map(c => parseInt(c.value)) };
-            break;
-        case 'weekly':
-        case 'biweekly':
-            freqConfig = { day_of_week: parseInt(document.getElementById('sf-dow').value) };
-            break;
-        case 'monthly':
-            freqConfig = { day_of_month: parseInt(document.getElementById('sf-dom').value) };
-            break;
-        case 'yearly':
-            freqConfig = { month: parseInt(document.getElementById('sf-month').value), day: parseInt(document.getElementById('sf-year-day').value) };
-            break;
+    // Don't collect freq config if "Multiple" placeholder is still selected
+    if (freq !== '__multiple__') {
+        switch (freq) {
+            case 'specific_days':
+                freqConfig = { days: [...document.querySelectorAll('.dow-check:checked')].map(c => parseInt(c.value)) };
+                break;
+            case 'weekly':
+            case 'biweekly':
+                freqConfig = { day_of_week: parseInt(document.getElementById('sf-dow')?.value || 1) };
+                break;
+            case 'monthly':
+                freqConfig = { day_of_month: parseInt(document.getElementById('sf-dom')?.value || 1) };
+                break;
+            case 'yearly':
+                freqConfig = { month: parseInt(document.getElementById('sf-month')?.value || 1), day: parseInt(document.getElementById('sf-year-day')?.value || 1) };
+                break;
+        }
     }
 
     const assignType = document.querySelector('[name="sf-assign-type"]:checked').value;
     const taskGroupIds = [...document.querySelectorAll('.tg-check:checked')].map(c => parseInt(c.value));
     const taskIds = [...document.querySelectorAll('.task-check:checked')].map(c => parseInt(c.value));
 
-    if (taskGroupIds.length === 0 && taskIds.length === 0) {
+    if (!bulkEditMode && taskGroupIds.length === 0 && taskIds.length === 0) {
         alert('Select at least one task group or individual task.');
         return;
     }
 
+    // ── Bulk edit mode: call bulk_update API with only changed fields ──
+    if (bulkEditMode) {
+        const ids = [...bulkSelectedIds];
+        const updates = {};
+
+        if (bulkDirtyFields.size === 0) {
+            alert('No changes made. Modify at least one field to apply.');
+            return;
+        }
+
+        if (bulkDirtyFields.has('frequency') && freq !== '__nochange__') {
+            updates.frequency = freq;
+            updates.frequency_config = freqConfig;
+        }
+
+        if (bulkDirtyFields.has('assign')) {
+            updates.assign_to_type = assignType;
+            updates.assign_to_user_id = assignType === 'user' ? (document.getElementById('sf-assign-user').value || null) : null;
+            updates.assign_to_role = assignType === 'role' ? document.getElementById('sf-assign-role').value : null;
+        }
+
+        if (bulkDirtyFields.has('deadline')) {
+            updates.deadline_time = document.getElementById('sf-deadline').value || null;
+        }
+
+        if (bulkDirtyFields.has('active')) {
+            updates.is_active = document.getElementById('sf-active').checked ? 1 : 0;
+        }
+
+        if (bulkDirtyFields.has('tasks')) {
+            updates.task_group_ids = taskGroupIds;
+            updates.task_ids = taskIds;
+        }
+
+        const r = await fetch(BASE_PATH + '/api/scheduling_api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: 'bulk_update', ids, updates })
+        });
+        const result = await r.json();
+        if (result.error) { alert(result.error); return; }
+
+        closeScheduleModal();
+        bulkDeselectAll();
+        loadSchedules();
+        loadCalendar();
+        return;
+    }
+
+    // ── Single save ──
     const body = {
         action: 'save_schedule',
         id: parseInt(document.getElementById('sf-id').value),
@@ -1110,6 +1550,76 @@ async function generateAssignments() {
     alert(`Generated ${result.created} new assignments (${result.skipped} already existed) for the next ${result.days_ahead} days.`);
     loadCalendar();
 }
+
+// ═══════════════════════════════════════════════════════════
+// BULK MULTI-SELECT
+// ═══════════════════════════════════════════════════════════
+
+function toggleBulkMode(on) {
+    document.querySelectorAll('.bulk-check').forEach(cb => {
+        cb.classList.toggle('hidden', !on);
+    });
+    if (!on) {
+        bulkSelectedIds.clear();
+        updateBulkUI();
+        document.querySelectorAll('.sched-card').forEach(c => c.classList.remove('bulk-selected'));
+        document.querySelectorAll('.bulk-check').forEach(cb => cb.checked = false);
+    }
+}
+
+function toggleBulkSelect(id, checked) {
+    if (checked) bulkSelectedIds.add(id);
+    else bulkSelectedIds.delete(id);
+
+    const card = document.querySelector(`.sched-card[data-sched-id="${id}"]`);
+    if (card) card.classList.toggle('bulk-selected', checked);
+    updateBulkUI();
+}
+
+function bulkSelectAll() {
+    schedules.forEach(s => bulkSelectedIds.add(s.id));
+    document.querySelectorAll('.bulk-check').forEach(cb => { cb.checked = true; });
+    document.querySelectorAll('.sched-card').forEach(c => c.classList.add('bulk-selected'));
+    updateBulkUI();
+}
+
+function bulkDeselectAll() {
+    bulkSelectedIds.clear();
+    document.querySelectorAll('.bulk-check').forEach(cb => { cb.checked = false; });
+    document.querySelectorAll('.sched-card').forEach(c => c.classList.remove('bulk-selected'));
+    updateBulkUI();
+}
+
+function updateBulkUI() {
+    const n = bulkSelectedIds.size;
+    const toolbar = document.getElementById('bulk-toolbar');
+    toolbar.classList.toggle('hidden', n === 0);
+    document.getElementById('bulk-count').textContent = `${n} selected`;
+}
+
+function openBulkEditModal() {
+    if (bulkSelectedIds.size === 0) return;
+    bulkEditMode = true;
+    openScheduleModal(null);
+}
+
+async function bulkDeleteSchedules() {
+    if (bulkSelectedIds.size === 0) return;
+    if (!confirm(`Delete ${bulkSelectedIds.size} schedule(s)? Pending future assignments will be removed.`)) return;
+
+    const r = await fetch(BASE_PATH + '/api/scheduling_api.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: 'bulk_delete', ids: [...bulkSelectedIds] })
+    });
+    const result = await r.json();
+    if (result.error) { alert(result.error); return; }
+
+    bulkDeselectAll();
+    loadSchedules();
+    loadCalendar();
+}
+
 </script>
 </body>
 </html>

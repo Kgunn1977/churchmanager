@@ -486,6 +486,16 @@ const roomPicker = new FloorPlanPicker({
     }
 });
 
+// Load V-Link + H-Link groups for picker
+fetch(BASE_PATH + '/api/room_links_api.php?action=get_links')
+    .then(r => r.json())
+    .then(links => roomPicker.setLinkedGroups(links))
+    .catch(() => {});
+fetch(BASE_PATH + '/api/h_link_api.php?action=get_groups')
+    .then(r => r.json())
+    .then(groups => roomPicker.setHLinkGroups(groups))
+    .catch(() => {});
+
 function updateRoomFilterBanner() {
     const banner = document.getElementById('room-filter-banner');
     const text   = document.getElementById('room-filter-text');

@@ -582,6 +582,12 @@ fetch(BASE_PATH + '/api/room_links_api.php?action=get_links')
     .then(r => r.json())
     .then(links => picker.setLinkedGroups(links));
 
+// Load H-Link groups and pass to picker
+fetch(BASE_PATH + '/api/h_link_api.php?action=get_groups')
+    .then(r => r.json())
+    .then(groups => picker.setHLinkGroups(groups))
+    .catch(() => {});
+
 // Convenience wrappers used elsewhere in the page
 function removeRoomById(id) {
     const sel = picker.getSelection();

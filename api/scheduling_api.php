@@ -309,6 +309,19 @@ switch ($action) {
         break;
     }
 
+    case 'delete_assignment': {
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin only']); break; }
+        $id = (int)($_POST['id'] ?? 0);
+        if (!$id) { echo json_encode(['error' => 'Missing id']); break; }
+
+        // Delete any checklist items tied to this assignment
+        $db->prepare("DELETE FROM janitor_task_checklist WHERE assignment_id = ?")->execute([$id]);
+        // Delete the assignment itself
+        $db->prepare("DELETE FROM janitor_task_assignments WHERE id = ?")->execute([$id]);
+        echo json_encode(['success' => true]);
+        break;
+    }
+
     // ═══════════════════════════════════════════════════════════
     // TOGGLE SCHEDULE ACTIVE
     // ═══════════════════════════════════════════════════════════
@@ -488,9 +501,10 @@ switch ($action) {
         $startDate = $_GET['start_date'] ?? date('Y-m-01');
         $endDate = $_GET['end_date'] ?? date('Y-m-t');
 
-        $query = "SELECT ja.assigned_date, ja.status, ja.room_id, ja.task_group_id, ja.task_id,
+        $query = "SELECT ja.id AS assignment_id, ja.assigned_date, ja.status, ja.room_id, ja.task_group_id, ja.task_id,
+                         ja.assigned_to AS worker_id,
                          COALESCE(tg.name, t.name) AS task_group_name,
-                         r.name AS room_name,
+                         r.name AS room_name, r.room_number,
                          u.name AS worker_name, cs.name AS schedule_name
                   FROM janitor_task_assignments ja
                   LEFT JOIN task_groups tg ON ja.task_group_id = tg.id
@@ -579,6 +593,143 @@ switch ($action) {
         $deleted = $stmt->rowCount();
 
         echo json_encode(['success' => true, 'deleted' => $deleted]);
+        break;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BULK UPDATE — apply partial updates to multiple schedules
+    // ═══════════════════════════════════════════════════════════
+    case 'bulk_update': {
+        $ids = array_map('intval', (array)($_POST['ids'] ?? []));
+        $updates = (array)($_POST['updates'] ?? []);
+        if (empty($ids)) { echo json_encode(['error' => 'No schedule IDs provided']); break; }
+        if (empty($updates)) { echo json_encode(['error' => 'No fields to update']); break; }
+
+        $validFreqs = ['daily','weekdays','specific_days','weekly','biweekly','monthly','yearly'];
+        $db->beginTransaction();
+        try {
+            foreach ($ids as $id) {
+                // Build SET clause dynamically based on which fields are present
+                $setClauses = [];
+                $params = [];
+
+                if (isset($updates['frequency'])) {
+                    if (!in_array($updates['frequency'], $validFreqs)) throw new Exception('Invalid frequency');
+                    $setClauses[] = 'frequency = ?';
+                    $params[] = $updates['frequency'];
+
+                    $freqConfig = $updates['frequency_config'] ?? null;
+                    $setClauses[] = 'frequency_config = ?';
+                    $params[] = $freqConfig ? (is_string($freqConfig) ? $freqConfig : json_encode($freqConfig)) : null;
+                }
+
+                if (isset($updates['assign_to_type'])) {
+                    $setClauses[] = 'assign_to_type = ?';
+                    $params[] = $updates['assign_to_type'];
+                    $setClauses[] = 'assign_to_user_id = ?';
+                    $params[] = ($updates['assign_to_type'] === 'user' && !empty($updates['assign_to_user_id'])) ? (int)$updates['assign_to_user_id'] : null;
+                    $setClauses[] = 'assign_to_role = ?';
+                    $params[] = $updates['assign_to_type'] === 'role' ? ($updates['assign_to_role'] ?? 'custodial') : null;
+                }
+
+                if (array_key_exists('deadline_time', $updates)) {
+                    $setClauses[] = 'deadline_time = ?';
+                    $params[] = !empty($updates['deadline_time']) ? trim($updates['deadline_time']) : null;
+                }
+
+                if (array_key_exists('is_active', $updates)) {
+                    $setClauses[] = 'is_active = ?';
+                    $params[] = (int)$updates['is_active'];
+                }
+
+                // Update the schedule row
+                if (!empty($setClauses)) {
+                    $params[] = $id;
+                    $sql = "UPDATE cleaning_schedules SET " . implode(', ', $setClauses) . " WHERE id = ?";
+                    $db->prepare($sql)->execute($params);
+                }
+
+                // Update name based on tasks (if tasks changed)
+                if (isset($updates['task_group_ids']) || isset($updates['task_ids'])) {
+                    $tgIds = array_map('intval', (array)($updates['task_group_ids'] ?? []));
+                    $tIds  = array_map('intval', (array)($updates['task_ids'] ?? []));
+
+                    $db->prepare("DELETE FROM cleaning_schedule_task_groups WHERE schedule_id = ?")->execute([$id]);
+                    $db->prepare("DELETE FROM cleaning_schedule_tasks WHERE schedule_id = ?")->execute([$id]);
+
+                    $name = 'Schedule';
+                    if (!empty($tgIds)) {
+                        foreach ($tgIds as $tgId) {
+                            $db->prepare("INSERT INTO cleaning_schedule_task_groups (schedule_id, task_group_id) VALUES (?, ?)")->execute([$id, $tgId]);
+                        }
+                        $n = $db->prepare("SELECT name FROM task_groups WHERE id = ?");
+                        $n->execute([$tgIds[0]]);
+                        $name = $n->fetchColumn() ?: 'Schedule';
+                    }
+                    if (!empty($tIds)) {
+                        foreach ($tIds as $tId) {
+                            $db->prepare("INSERT INTO cleaning_schedule_tasks (schedule_id, task_id) VALUES (?, ?)")->execute([$id, $tId]);
+                        }
+                        if ($name === 'Schedule') {
+                            $n = $db->prepare("SELECT name FROM tasks WHERE id = ?");
+                            $n->execute([$tIds[0]]);
+                            $name = $n->fetchColumn() ?: 'Schedule';
+                        }
+                    }
+                    $db->prepare("UPDATE cleaning_schedules SET name = ? WHERE id = ?")->execute([$name, $id]);
+                }
+
+                // Update rooms if provided
+                if (isset($updates['room_ids'])) {
+                    $roomIds = array_map('intval', (array)$updates['room_ids']);
+                    $db->prepare("DELETE FROM cleaning_schedule_rooms WHERE schedule_id = ?")->execute([$id]);
+                    foreach ($roomIds as $roomId) {
+                        $db->prepare("INSERT INTO cleaning_schedule_rooms (schedule_id, room_id) VALUES (?, ?)")->execute([$id, $roomId]);
+                    }
+                }
+            }
+
+            $db->commit();
+            echo json_encode(['success' => true, 'updated' => count($ids)]);
+        } catch (Exception $e) {
+            $db->rollBack();
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+        break;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BULK DELETE — delete multiple schedules at once
+    // ═══════════════════════════════════════════════════════════
+    case 'bulk_delete': {
+        $ids = array_map('intval', (array)($_POST['ids'] ?? []));
+        if (empty($ids)) { echo json_encode(['error' => 'No schedule IDs provided']); break; }
+
+        $today = date('Y-m-d');
+        $db->beginTransaction();
+        try {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+
+            // Delete pending future assignments & checklists
+            $db->prepare("
+                DELETE jtc FROM janitor_task_checklist jtc
+                JOIN janitor_task_assignments ja ON jtc.assignment_id = ja.id
+                WHERE ja.schedule_id IN ($ph) AND ja.status = 'pending' AND ja.assigned_date >= ?
+            ")->execute(array_merge($ids, [$today]));
+            $db->prepare("
+                DELETE FROM janitor_task_assignments
+                WHERE schedule_id IN ($ph) AND status = 'pending' AND assigned_date >= ?
+            ")->execute(array_merge($ids, [$today]));
+
+            // Delete schedules
+            $db->prepare("DELETE FROM cleaning_schedules WHERE id IN ($ph)")->execute($ids);
+
+            $db->commit();
+            echo json_encode(['success' => true, 'deleted' => count($ids)]);
+        } catch (Exception $e) {
+            $db->rollBack();
+            echo json_encode(['error' => $e->getMessage()]);
+        }
         break;
     }
 

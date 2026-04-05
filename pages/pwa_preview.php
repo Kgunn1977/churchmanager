@@ -9,6 +9,10 @@ require_once __DIR__ . '/../includes/nav.php';
 require_once __DIR__ . '/../config/database.php';
 $db = getDB();
 $user = getCurrentUser();
+
+// Load workers for "View As" dropdown
+$workers = $db->query("SELECT id, name, role FROM users WHERE role IN ('admin','custodial','staff','scheduler') ORDER BY name")->fetchAll();
+$viewAsId = isset($_GET['view_as']) ? (int)$_GET['view_as'] : (int)$user['id'];
 ?>
 
 <div style="height:calc(100vh - 56px); display:flex; overflow:hidden;">
@@ -23,7 +27,7 @@ $user = getCurrentUser();
                 <div style="position:absolute; top:14px; left:50%; transform:translateX(-50%); width:150px; height:28px; background:#1a1a1a; border-radius:0 0 16px 16px; z-index:10;"></div>
                 <!-- Screen -->
                 <iframe id="pwa-frame"
-                        src="<?= url('/pwa/index.php') ?>?skipinstall=1"
+                        src="<?= url('/pwa/index.php') ?>?skipinstall=1<?= $viewAsId !== (int)$user['id'] ? '&view_as=' . $viewAsId : '' ?>"
                         style="width:100%; height:100%; border:none; border-radius:32px; background:#fff;"
                         allow="same-origin"></iframe>
             </div>
@@ -51,6 +55,18 @@ $user = getCurrentUser();
                 <option value="430,932">iPhone 15 Pro Max (430 × 932)</option>
                 <option value="360,780">Android Medium (360 × 780)</option>
                 <option value="412,915">Pixel 7 (412 × 915)</option>
+            </select>
+        </div>
+
+        <!-- View As -->
+        <div style="margin-bottom:20px;">
+            <label style="display:block; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">View As</label>
+            <select id="view-as-picker" onchange="changeViewAs()" style="width:100%; border:1px solid #d1d5db; border-radius:8px; padding:8px 12px; font-size:13px; color:#374151;">
+                <?php foreach ($workers as $w): ?>
+                <option value="<?= $w['id'] ?>" <?= $w['id'] == $viewAsId ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($w['name']) ?> (<?= htmlspecialchars($w['role']) ?>)
+                </option>
+                <?php endforeach; ?>
             </select>
         </div>
 
@@ -95,6 +111,14 @@ $user = getCurrentUser();
 </div>
 
 <script>
+function changeViewAs() {
+    const userId = document.getElementById('view-as-picker').value;
+    const frame = document.getElementById('pwa-frame');
+    const baseUrl = '<?= url('/pwa/index.php') ?>?skipinstall=1';
+    const myId = <?= (int)$user['id'] ?>;
+    frame.src = baseUrl + (parseInt(userId) !== myId ? '&view_as=' + userId : '');
+}
+
 function changeDevice() {
     const [w, h] = document.getElementById('device-picker').value.split(',').map(Number);
     const bezel = document.querySelector('[style*="width:375px"]') || document.querySelector('[style*="width:390px"]') || document.querySelector('[style*="width:360px"]') || document.querySelector('[style*="width:412px"]') || document.querySelector('[style*="width:430px"]');

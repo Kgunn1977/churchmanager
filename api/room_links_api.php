@@ -17,7 +17,7 @@ switch ($action) {
     // Returns all room links with their member room IDs and names.
     case 'get_links': {
         $stmt = $db->query("
-            SELECT rl.id, rl.name, rl.building_id,
+            SELECT rl.id, rl.name, rl.building_id, rl.virtual_room_id,
                    GROUP_CONCAT(rlm.room_id ORDER BY rlm.room_id) AS room_ids_csv
             FROM room_links rl
             JOIN room_link_members rlm ON rlm.link_id = rl.id
@@ -26,10 +26,11 @@ switch ($action) {
         $rows = $stmt->fetchAll();
         $links = array_map(function($r) {
             return [
-                'id'          => (int)$r['id'],
-                'name'        => $r['name'],
-                'building_id' => (int)$r['building_id'],
-                'room_ids'    => array_map('intval', explode(',', $r['room_ids_csv'])),
+                'id'              => (int)$r['id'],
+                'name'            => $r['name'],
+                'building_id'     => (int)$r['building_id'],
+                'virtual_room_id' => $r['virtual_room_id'] ? (int)$r['virtual_room_id'] : null,
+                'room_ids'        => array_map('intval', explode(',', $r['room_ids_csv'])),
             ];
         }, $rows);
         echo json_encode($links);
@@ -79,7 +80,7 @@ switch ($action) {
 
         $db->beginTransaction();
         try {
-            // Create link record
+            // Create link record (virtual_room_id filled below)
             $stmt = $db->prepare("INSERT INTO room_links (name, building_id) VALUES (?, ?)");
             $stmt->execute([$name, $buildingId]);
             $linkId = (int)$db->lastInsertId();
@@ -92,14 +93,43 @@ switch ($action) {
                 $renameRoom->execute([$name, $room['id']]);
             }
 
+            // ── Create virtual room ──
+            // Sum capacity from all member rooms
+            $stmt = $db->prepare("SELECT COALESCE(SUM(capacity), 0) FROM rooms WHERE id IN ($placeholders)");
+            $stmt->execute($roomIds);
+            $totalCap = (int)$stmt->fetchColumn();
+
+            // Merge polygons via convex hull
+            $stmt = $db->prepare("SELECT id, map_points FROM rooms WHERE id IN ($placeholders)");
+            $stmt->execute($roomIds);
+            $memberRoomData = $stmt->fetchAll();
+            $mergedPoints = _mergePolygons($memberRoomData);
+
+            // Use first member's floor for virtual room placement
+            $stmt = $db->prepare("SELECT floor_id FROM rooms WHERE id = ?");
+            $stmt->execute([$roomIds[0]]);
+            $floorId = (int)$stmt->fetchColumn();
+
+            $abbr = _autoAbbrev($name);
+            $stmt = $db->prepare("
+                INSERT INTO rooms (floor_id, name, abbreviation, capacity, map_points, is_reservable, is_storage, is_virtual)
+                VALUES (?, ?, ?, ?, ?, 1, 0, 1)
+            ");
+            $stmt->execute([$floorId, $name, $abbr, $totalCap, $mergedPoints ? json_encode($mergedPoints) : null]);
+            $virtualRoomId = (int)$db->lastInsertId();
+
+            // Link virtual room back to the V-Link group
+            $db->prepare("UPDATE room_links SET virtual_room_id = ? WHERE id = ?")->execute([$virtualRoomId, $linkId]);
+
             $db->commit();
             echo json_encode([
                 'success' => true,
                 'link'    => [
-                    'id'          => $linkId,
-                    'name'        => $name,
-                    'building_id' => $buildingId,
-                    'room_ids'    => array_map('intval', $roomIds),
+                    'id'              => $linkId,
+                    'name'            => $name,
+                    'building_id'     => $buildingId,
+                    'virtual_room_id' => $virtualRoomId,
+                    'room_ids'        => array_map('intval', $roomIds),
                 ],
             ]);
         } catch (Exception $e) {
@@ -127,6 +157,11 @@ switch ($action) {
 
         $db->beginTransaction();
         try {
+            // Get virtual_room_id before deleting
+            $stmt = $db->prepare("SELECT virtual_room_id FROM room_links WHERE id = ?");
+            $stmt->execute([$linkId]);
+            $virtualRoomId = (int)($stmt->fetchColumn() ?: 0);
+
             // Restore original names
             $stmt = $db->prepare("SELECT room_id, original_name FROM room_link_members WHERE link_id = ?");
             $stmt->execute([$linkId]);
@@ -141,6 +176,12 @@ switch ($action) {
             $db->prepare("DELETE FROM room_link_members WHERE link_id = ?")->execute([$linkId]);
             $db->prepare("DELETE FROM room_links WHERE id = ?")->execute([$linkId]);
 
+            // Delete the virtual room
+            if ($virtualRoomId) {
+                $db->prepare("DELETE FROM reservation_rooms WHERE room_id = ?")->execute([$virtualRoomId]);
+                $db->prepare("DELETE FROM rooms WHERE id = ? AND is_virtual = 1")->execute([$virtualRoomId]);
+            }
+
             $db->commit();
             echo json_encode(['success' => true, 'restored_rooms' => array_map(fn($m) => (int)$m['room_id'], $members)]);
         } catch (Exception $e) {
@@ -152,4 +193,45 @@ switch ($action) {
 
     default:
         echo json_encode(['error' => 'Unknown action']);
+}
+
+// ── Helper: merge polygons via convex hull (Graham scan) ──
+function _mergePolygons(array $memberRooms): ?array {
+    $allPts = [];
+    foreach ($memberRooms as $r) {
+        $pts = $r['map_points'] ? json_decode($r['map_points'], true) : null;
+        if ($pts && is_array($pts)) {
+            foreach ($pts as $p) $allPts[] = $p;
+        }
+    }
+    if (count($allPts) < 3) return null;
+
+    usort($allPts, fn($a, $b) => $a[0] === $b[0] ? $a[1] <=> $b[1] : $a[0] <=> $b[0]);
+    $allPts = array_values(array_unique(array_map('json_encode', $allPts)));
+    $allPts = array_map('json_decode', $allPts);
+
+    if (count($allPts) < 3) return array_map(fn($p) => [(float)$p[0], (float)$p[1]], $allPts);
+
+    $cross = fn($O, $A, $B) => ($A[0] - $O[0]) * ($B[1] - $O[1]) - ($A[1] - $O[1]) * ($B[0] - $O[0]);
+    $lower = [];
+    foreach ($allPts as $p) {
+        while (count($lower) >= 2 && $cross($lower[count($lower)-2], $lower[count($lower)-1], $p) <= 0)
+            array_pop($lower);
+        $lower[] = $p;
+    }
+    $upper = [];
+    foreach (array_reverse($allPts) as $p) {
+        while (count($upper) >= 2 && $cross($upper[count($upper)-2], $upper[count($upper)-1], $p) <= 0)
+            array_pop($upper);
+        $upper[] = $p;
+    }
+    array_pop($lower); array_pop($upper);
+    $hull = array_merge($lower, $upper);
+    return array_map(fn($p) => [(float)$p[0], (float)$p[1]], $hull);
+}
+
+function _autoAbbrev(string $name): string {
+    $w = preg_split('/\s+/', trim($name));
+    if (count($w) === 1) return strtoupper(substr($name, 0, 4));
+    return strtoupper(substr(implode('', array_map(fn($x) => $x[0], $w)), 0, 5));
 }
