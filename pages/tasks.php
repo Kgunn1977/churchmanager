@@ -545,9 +545,8 @@ function loadList() {
     const typeId   = document.getElementById('filter-type').value;
     const workerId = document.getElementById('filter-worker').value;
     const q        = document.getElementById('filter-search').value.trim();
-    // Only apply room filtering when editor is CLOSED — when open, the picker
-    // is in "room assignment" mode, not "filter" mode
-    const hasRoomFilter = !editorIsOpen() && selectedRoomIds.length > 0;
+    // Room-based filtering disabled — room associations have been stripped from tasks
+    const hasRoomFilter = false;
 
     if (currentTab === 'tasks') {
         loadTasks(typeId, workerId, q, hasRoomFilter);
