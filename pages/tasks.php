@@ -486,14 +486,10 @@ const roomPicker = new FloorPlanPicker({
     }
 });
 
-// Load V-Link + H-Link groups for picker
-fetch(BASE_PATH + '/api/room_links_api.php?action=get_links')
+// Load link groups for picker
+fetch(BASE_PATH + '/api/links_api.php?action=get_links')
     .then(r => r.json())
-    .then(links => roomPicker.setLinkedGroups(links))
-    .catch(() => {});
-fetch(BASE_PATH + '/api/h_link_api.php?action=get_groups')
-    .then(r => r.json())
-    .then(groups => roomPicker.setHLinkGroups(groups))
+    .then(links => roomPicker.setLinkGroups(links))
     .catch(() => {});
 
 function updateRoomFilterBanner() {

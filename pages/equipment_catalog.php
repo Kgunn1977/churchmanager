@@ -660,19 +660,11 @@ const eqPicker = new FloorPlanPicker({
     }
 });
 
-// Load V-Link + H-Link groups for picker
-(async () => {
-    try {
-        const res = await fetch(BASE_PATH + '/api/room_links_api.php?action=get_links');
-        const groups = await res.json();
-        eqPicker.setLinkedGroups(groups);
-    } catch(e) {}
-    try {
-        const res = await fetch(BASE_PATH + '/api/h_link_api.php?action=get_groups');
-        const groups = await res.json();
-        eqPicker.setHLinkGroups(groups);
-    } catch(e) {}
-})();
+// Load link groups for picker
+fetch(BASE_PATH + '/api/links_api.php?action=get_links')
+    .then(r => r.json())
+    .then(links => eqPicker.setLinkGroups(links))
+    .catch(() => {});
 
 // ═══════════════════════════════════════════════════════════
 // HELPERS
