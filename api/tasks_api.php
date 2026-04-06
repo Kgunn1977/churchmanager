@@ -610,22 +610,26 @@ switch ($action) {
         $assignments = $stmt->fetchAll();
 
         // Load checklist for each, with sub-group name for nested groups
-        // The LEFT JOIN is constrained to only match sub-groups that are children
-        // of the assignment's main group, preventing tasks from bleeding across groups
+        // tgt_main: sort order from the main group's task_group_tasks (for simple groups)
+        // tgt_sub:  sort order from child sub-groups (for group-of-groups)
         $stChecklist = $db->prepare("
             SELECT jtc.task_id, t.name AS task_name, t.description AS task_description,
                    t.estimated_minutes AS task_minutes,
                    jtc.completed, jtc.completed_at,
-                   tgt_sub.task_group_id AS sub_group_id
+                   tgt_sub.task_group_id AS sub_group_id,
+                   COALESCE(tgt_sub.sort_order, tgt_main.sort_order, 9999) AS effective_sort
             FROM janitor_task_checklist jtc
             JOIN tasks t ON t.id = jtc.task_id
+            LEFT JOIN task_group_tasks tgt_main
+                ON tgt_main.task_id = t.id
+                AND tgt_main.task_group_id = ?
             LEFT JOIN task_group_tasks tgt_sub
                 ON tgt_sub.task_id = t.id
                 AND tgt_sub.task_group_id IN (
                     SELECT id FROM task_groups WHERE parent_id = ?
                 )
             WHERE jtc.assignment_id = ?
-            ORDER BY tgt_sub.task_group_id, tgt_sub.sort_order, t.name
+            ORDER BY tgt_sub.task_group_id, COALESCE(tgt_sub.sort_order, tgt_main.sort_order, 9999), t.name
         ");
         $stSubGroupName = $db->prepare("SELECT name FROM task_groups WHERE id = ?");
 
@@ -638,7 +642,7 @@ switch ($action) {
 
         foreach ($assignments as &$a) {
             $mainGroupId = $a['task_group_id'];
-            $stChecklist->execute([$mainGroupId ?: 0, $a['id']]);
+            $stChecklist->execute([$mainGroupId ?: 0, $mainGroupId ?: 0, $a['id']]);
             $items = $stChecklist->fetchAll();
 
             // Resolve sub-group names from the matched child groups
@@ -655,6 +659,7 @@ switch ($action) {
                     $item['sub_group_name'] = $sgNameCache[$sgId];
                 }
                 unset($item['sub_group_id']); // don't leak internal id
+                unset($item['effective_sort']); // only used for ORDER BY
 
                 // Attach resources (cached per task_id)
                 $tid = $item['task_id'];
