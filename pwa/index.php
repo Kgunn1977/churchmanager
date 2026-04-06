@@ -1202,9 +1202,11 @@ function renderDefaultView() {
     const empty = document.getElementById('emptyState');
     list.innerHTML = '';
 
-    // Sort: groups of groups first, then groups, then individual tasks
+    // Sort by admin-defined sort_order first, then hierarchy type as tiebreaker
     const hierOrder = { group_of_groups: 0, group: 1, task: 2 };
     let sorted = [...assignments].sort((a, b) => {
+        const sa = a.sort_order ?? 0, sb = b.sort_order ?? 0;
+        if (sa !== sb) return sa - sb;
         const ha = hierOrder[a.hierarchy_type] ?? 1;
         const hb = hierOrder[b.hierarchy_type] ?? 1;
         return ha - hb;

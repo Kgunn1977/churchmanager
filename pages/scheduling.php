@@ -77,6 +77,35 @@ html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
     cursor: pointer; transition: all .12s; flex-shrink: 0;
 }
 .sched-edit-btn:hover { background: #eff6ff; border-color: #93c5fd; color: #2563eb; }
+
+/* ── Day view mode buttons ──────────────────────────────── */
+.dv-mode-btn {
+    display:flex; align-items:center; justify-content:center;
+    width:28px; height:24px; border:none; background:transparent;
+    border-radius:6px; cursor:pointer; color:#9ca3af; transition:all .12s;
+}
+.dv-mode-btn:hover { background:#e5e7eb; color:#374151; }
+.dv-mode-btn.active { background:#fff; color:#2563eb; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+
+/* ── Drag reorder styles ────────────────────────────────── */
+.drag-item {
+    display:flex; align-items:center; gap:8px; padding:10px 12px;
+    background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+    margin-bottom:6px; transition:border-color .15s, box-shadow .15s, opacity .15s;
+    cursor:default;
+}
+.drag-item:hover { border-color:#93c5fd; box-shadow:0 2px 8px rgba(37,99,235,.08); }
+.drag-handle {
+    cursor:grab; color:#d1d5db; flex-shrink:0; padding:2px;
+    transition:color .12s; touch-action:none;
+}
+.drag-handle:hover { color:#6b7280; }
+.drag-handle:active { cursor:grabbing; }
+.drag-item.dragging { opacity:.4; border-color:#3b82f6; }
+.drag-placeholder {
+    border:2px dashed #93c5fd; border-radius:10px; background:#eff6ff;
+    margin-bottom:6px; transition:height .15s;
+}
 .sched-task-item {
     display: flex; align-items: center; justify-content: space-between;
     padding: 6px 0; border-bottom: 1px solid #f8fafc; font-size: 13px; color: #374151;
@@ -171,6 +200,18 @@ html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
                 <div class="flex items-center justify-between mb-3">
                     <h3 id="day-view-title" class="text-sm font-bold text-gray-700"></h3>
                     <div class="flex items-center gap-2">
+                        <!-- View mode toolbar (matches PWA) -->
+                        <div class="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+                            <button id="dv-mode-default" onclick="setDayViewMode('default')" class="dv-mode-btn active" title="Default view (drag to reorder)">
+                                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                            </button>
+                            <button id="dv-mode-rooms" onclick="setDayViewMode('rooms')" class="dv-mode-btn" title="Group by room">
+                                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v13a1 1 0 001 1h3m10-11l2 2m-2-2v13a1 1 0 01-1 1h-3m-4 0h4"/></svg>
+                            </button>
+                            <button id="dv-mode-task" onclick="setDayViewMode('task')" class="dv-mode-btn" title="Group by task type">
+                                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                            </button>
+                        </div>
                         <select id="day-worker-filter" onchange="renderDayView()" class="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-600">
                             <option value="">All Workers</option>
                         </select>
@@ -541,6 +582,15 @@ function showDayDetail(dateStr, dayNum) {
     if (currentView === 'rule') renderSchedules();
 }
 
+let dayViewMode = 'default';
+
+function setDayViewMode(mode) {
+    dayViewMode = mode;
+    document.querySelectorAll('.dv-mode-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('dv-mode-' + mode).classList.add('active');
+    renderDayView();
+}
+
 function renderDayView() {
     const list  = document.getElementById('day-view-list');
     const empty = document.getElementById('day-view-empty');
@@ -553,15 +603,13 @@ function renderDayView() {
         return;
     }
 
-    // Parse selected date for title
     const [yr, mo, dy] = selectedDate.split('-').map(Number);
     const monthsShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     title.textContent = `${monthsShort[mo-1]} ${dy}, ${yr}`;
 
-    // Filter assignments for this date
     let dayItems = calendarAssignments.filter(a => a.assigned_date === selectedDate);
 
-    // Populate worker filter dropdown
+    // Populate worker filter
     const workerFilter = document.getElementById('day-worker-filter');
     const currentFilterVal = workerFilter.value;
     const workers = {};
@@ -574,8 +622,6 @@ function renderDayView() {
     Object.entries(workers).sort((a,b) => a[1].localeCompare(b[1])).forEach(([id, name]) => {
         workerFilter.innerHTML += `<option value="${id}" ${id === currentFilterVal ? 'selected' : ''}>${esc(name)}</option>`;
     });
-
-    // Apply worker filter
     const filterWorker = workerFilter.value;
     if (filterWorker) {
         dayItems = dayItems.filter(a => String(a.worker_id || '0') === filterWorker);
@@ -588,7 +634,74 @@ function renderDayView() {
     }
     empty.classList.add('hidden');
 
-    // Group assignments by room for a cleaner PWA-style layout
+    if (dayViewMode === 'rooms') return renderDayViewRooms(dayItems);
+    if (dayViewMode === 'task') return renderDayViewTask(dayItems);
+    renderDayViewDefault(dayItems);
+}
+
+// ── Status indicator HTML ──────────────────────────────────
+function statusDot(status) {
+    if (status === 'completed') return `<span class="w-5 h-5 flex items-center justify-center flex-shrink-0 rounded-full bg-green-100 text-green-600"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></span>`;
+    if (status === 'in_progress') return `<span class="w-5 h-5 flex items-center justify-center flex-shrink-0 rounded-full bg-yellow-100 text-yellow-600"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/></svg></span>`;
+    return `<span class="w-5 h-5 flex items-center justify-center flex-shrink-0 rounded-full bg-gray-100 text-gray-400"><span class="w-2 h-2 rounded-full bg-gray-300"></span></span>`;
+}
+
+function assignmentRow(a, roomLabel) {
+    return `
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 min-w-0">
+                ${statusDot(a.status)}
+                <div class="min-w-0">
+                    <span class="text-sm ${a.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-700'}">${esc(a.task_group_name)}</span>
+                    ${roomLabel ? `<div class="text-xs text-gray-400">${esc(roomLabel)}</div>` : ''}
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button onclick="event.stopPropagation(); toggleAssignDetail(${a.assignment_id})" class="text-gray-400 hover:text-blue-600 transition text-xs font-medium px-1.5 py-0.5 rounded hover:bg-blue-50" title="View details">View</button>
+                <button onclick="event.stopPropagation(); deleteAssignment(${a.assignment_id})" class="text-gray-300 hover:text-red-500 transition" title="Delete assignment">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+            </div>
+        </div>
+        <div id="assign-detail-${a.assignment_id}" class="hidden mt-2 ml-7 bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-1.5">
+            <div class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                <span class="font-semibold text-gray-500">Room:</span> ${esc(a.room_name)}${a.room_number ? ' #'+esc(a.room_number) : ''}</div>
+            <div class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                <span class="font-semibold text-gray-500">Task:</span> ${esc(a.task_group_name)}</div>
+            <div class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                <span class="font-semibold text-gray-500">Worker:</span> ${esc(a.worker_name || 'Unassigned')}</div>
+            <div class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span class="font-semibold text-gray-500">Status:</span>
+                <span class="font-semibold px-1.5 py-0.5 rounded-full ${a.status==='completed'?'bg-green-100 text-green-700':a.status==='in_progress'?'bg-yellow-100 text-yellow-700':'bg-gray-100 text-gray-500'}">${a.status.replace('_',' ')}</span></div>
+        </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DEFAULT VIEW — Flat list with drag reorder
+// ═══════════════════════════════════════════════════════════
+function renderDayViewDefault(dayItems) {
+    const list = document.getElementById('day-view-list');
+    list.innerHTML = dayItems.map(a => `
+        <div class="drag-item" data-assign-id="${a.assignment_id}">
+            <div class="drag-handle" title="Drag to reorder">
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M7 2a2 2 0 10.001 4.001A2 2 0 007 2zm0 6a2 2 0 10.001 4.001A2 2 0 007 8zm0 6a2 2 0 10.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z"/>
+                </svg>
+            </div>
+            <div style="flex:1;min-width:0;">
+                ${assignmentRow(a, a.room_name + (a.room_number ? ' #'+a.room_number : ''))}
+            </div>
+        </div>
+    `).join('');
+
+    initDragReorder(list);
+}
+
+// ═══════════════════════════════════════════════════════════
+// ROOMS VIEW — Grouped by room (original layout)
+// ═══════════════════════════════════════════════════════════
+function renderDayViewRooms(dayItems) {
+    const list = document.getElementById('day-view-list');
     const byRoom = {};
     dayItems.forEach(a => {
         const key = a.room_id;
@@ -600,7 +713,6 @@ function renderDayView() {
         const roomDone = room.items.filter(a => a.status === 'completed').length;
         const roomTotal = room.items.length;
         const allDone = roomDone === roomTotal;
-
         return `
         <div class="sched-card ${allDone ? 'opacity-60' : ''}" data-room-card>
             <div class="sched-card-hdr" onclick="this.parentElement.classList.toggle('open')">
@@ -617,59 +729,165 @@ function renderDayView() {
                 </div>
             </div>
             <div class="sched-card-body" style="padding:0 16px 12px;">
-                ${room.items.map(a => `
-                    <div class="py-2 border-b border-gray-50 last:border-0" id="assign-row-${a.assignment_id}">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <span class="w-5 h-5 flex items-center justify-center flex-shrink-0 rounded-full ${
-                                    a.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                    a.status === 'in_progress' ? 'bg-yellow-100 text-yellow-600' :
-                                    'bg-gray-100 text-gray-400'
-                                }">
-                                    ${a.status === 'completed'
-                                        ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>'
-                                        : a.status === 'in_progress'
-                                            ? '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/></svg>'
-                                            : '<span class="w-2 h-2 rounded-full bg-gray-300"></span>'
-                                    }
-                                </span>
-                                <span class="text-sm ${a.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-700'}">${esc(a.task_group_name)}</span>
-                            </div>
-                            <div class="flex items-center gap-2 flex-shrink-0">
-                                <button onclick="event.stopPropagation(); toggleAssignDetail(${a.assignment_id})" class="text-gray-400 hover:text-blue-600 transition text-xs font-medium px-1.5 py-0.5 rounded hover:bg-blue-50" title="View details">View</button>
-                                <button onclick="event.stopPropagation(); deleteAssignment(${a.assignment_id})" class="text-gray-300 hover:text-red-500 transition" title="Delete assignment">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                </button>
-                            </div>
-                        </div>
-                        <div id="assign-detail-${a.assignment_id}" class="hidden mt-2 ml-7 bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-1.5">
-                            <div class="flex items-center gap-2">
-                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                                <span class="font-semibold text-gray-500">Room:</span> ${esc(room.room_name)}${room.room_number ? ' #'+esc(room.room_number) : ''}
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                                <span class="font-semibold text-gray-500">Task:</span> ${esc(a.task_group_name)}
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                                <span class="font-semibold text-gray-500">Worker:</span> ${esc(a.worker_name || 'Unassigned')}
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span class="font-semibold text-gray-500">Status:</span>
-                                <span class="font-semibold px-1.5 py-0.5 rounded-full ${
-                                    a.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                    a.status === 'in_progress' ? 'bg-yellow-100 text-yellow-700' :
-                                    'bg-gray-100 text-gray-500'
-                                }">${a.status.replace('_', ' ')}</span>
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
+                ${room.items.map(a => `<div class="py-2 border-b border-gray-50 last:border-0">${assignmentRow(a, null)}</div>`).join('')}
             </div>
         </div>`;
     }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// TASK TYPE VIEW — Grouped by task type
+// ═══════════════════════════════════════════════════════════
+function renderDayViewTask(dayItems) {
+    const list = document.getElementById('day-view-list');
+    const byType = {};
+    dayItems.forEach(a => {
+        const key = a.task_group_name || 'Untitled';
+        if (!byType[key]) byType[key] = [];
+        byType[key].push(a);
+    });
+
+    list.innerHTML = Object.entries(byType).sort((a,b) => a[0].localeCompare(b[0])).map(([typeName, items]) => {
+        const done = items.filter(a => a.status === 'completed').length;
+        const total = items.length;
+        const allDone = done === total;
+        return `
+        <div class="sched-card ${allDone ? 'opacity-60' : ''}" data-type-card>
+            <div class="sched-card-hdr" onclick="this.parentElement.classList.toggle('open')">
+                <svg class="sched-expand-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                <div style="flex:1;min-width:0;">
+                    <div class="font-bold text-gray-800 text-sm">${esc(typeName)}</div>
+                    <div class="text-xs text-gray-400 mt-0.5">${done}/${total} tasks done</div>
+                </div>
+                <div class="flex items-center gap-2" style="flex-shrink:0;">
+                    ${allDone
+                        ? '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Complete</span>'
+                        : `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">${done}/${total}</span>`
+                    }
+                </div>
+            </div>
+            <div class="sched-card-body" style="padding:0 16px 12px;">
+                ${items.map(a => `<div class="py-2 border-b border-gray-50 last:border-0">${assignmentRow(a, a.room_name + (a.room_number ? ' #'+a.room_number : ''))}</div>`).join('')}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// DRAG REORDER ENGINE
+// ═══════════════════════════════════════════════════════════
+function initDragReorder(container) {
+    let dragEl = null;
+    let placeholder = null;
+
+    container.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('mousedown', startDrag);
+        handle.addEventListener('touchstart', startDrag, { passive: false });
+    });
+
+    function startDrag(e) {
+        e.preventDefault();
+        dragEl = e.target.closest('.drag-item');
+        if (!dragEl) return;
+
+        const rect = dragEl.getBoundingClientRect();
+        dragEl.classList.add('dragging');
+
+        placeholder = document.createElement('div');
+        placeholder.className = 'drag-placeholder';
+        placeholder.style.height = rect.height + 'px';
+        dragEl.parentNode.insertBefore(placeholder, dragEl.nextSibling);
+
+        // Make drag element float
+        dragEl.style.position = 'fixed';
+        dragEl.style.width = rect.width + 'px';
+        dragEl.style.left = rect.left + 'px';
+        dragEl.style.top = rect.top + 'px';
+        dragEl.style.zIndex = '1000';
+        dragEl.style.pointerEvents = 'none';
+
+        const onMove = e.type === 'touchstart' ? 'touchmove' : 'mousemove';
+        const onEnd = e.type === 'touchstart' ? 'touchend' : 'mouseup';
+
+        const startY = (e.touches ? e.touches[0] : e).clientY;
+        const startTop = rect.top;
+
+        function handleMove(ev) {
+            const clientY = (ev.touches ? ev.touches[0] : ev).clientY;
+            dragEl.style.top = (startTop + clientY - startY) + 'px';
+
+            // Find the item we're hovering over
+            const siblings = [...container.querySelectorAll('.drag-item:not(.dragging), .drag-placeholder')];
+            for (const sib of siblings) {
+                if (sib === placeholder) continue;
+                const sibRect = sib.getBoundingClientRect();
+                const mid = sibRect.top + sibRect.height / 2;
+                if (clientY < mid) {
+                    container.insertBefore(placeholder, sib);
+                    return;
+                }
+            }
+            // Past all items → append
+            container.appendChild(placeholder);
+        }
+
+        function handleEnd() {
+            document.removeEventListener(onMove, handleMove);
+            document.removeEventListener(onEnd, handleEnd);
+
+            // Insert dragEl where placeholder is
+            container.insertBefore(dragEl, placeholder);
+            placeholder.remove();
+
+            // Reset styles
+            dragEl.classList.remove('dragging');
+            dragEl.style.position = '';
+            dragEl.style.width = '';
+            dragEl.style.left = '';
+            dragEl.style.top = '';
+            dragEl.style.zIndex = '';
+            dragEl.style.pointerEvents = '';
+
+            dragEl = null;
+            placeholder = null;
+
+            // Save new order
+            saveDragOrder(container);
+        }
+
+        document.addEventListener(onMove, handleMove, { passive: false });
+        document.addEventListener(onEnd, handleEnd);
+    }
+}
+
+async function saveDragOrder(container) {
+    const items = container.querySelectorAll('.drag-item');
+    const orders = [];
+    items.forEach((el, idx) => {
+        const id = el.getAttribute('data-assign-id');
+        orders.push({ id: parseInt(id), sort_order: idx });
+    });
+
+    // Update local data so re-renders keep the new order
+    const orderMap = {};
+    orders.forEach(o => orderMap[o.id] = o.sort_order);
+    calendarAssignments.forEach(a => {
+        if (orderMap[a.assignment_id] !== undefined) {
+            a.sort_order = orderMap[a.assignment_id];
+        }
+    });
+    // Re-sort the local array by the new sort_order for this date
+    calendarAssignments.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.assigned_date.localeCompare(b.assigned_date));
+
+    try {
+        await fetch(BASE_PATH + '/api/tasks_api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reorder_assignments', orders })
+        });
+    } catch (e) {
+        console.error('Failed to save order:', e);
+    }
 }
 
 function toggleAssignDetail(id) {

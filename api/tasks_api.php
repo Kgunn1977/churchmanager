@@ -604,7 +604,7 @@ switch ($action) {
             JOIN floors fl      ON fl.id = rm.floor_id
             JOIN buildings b    ON b.id  = fl.building_id
             WHERE {$whereStr}
-            ORDER BY COALESCE(tt.priority_order, tt2.priority_order, 999), ja.deadline, COALESCE(tg.name, t_single.name)
+            ORDER BY ja.sort_order, COALESCE(tt.priority_order, tt2.priority_order, 999), ja.deadline, COALESCE(tg.name, t_single.name)
         ");
         $stmt->execute($params);
         $assignments = $stmt->fetchAll();
@@ -718,6 +718,19 @@ switch ($action) {
         }
         $db->prepare("UPDATE janitor_task_assignments SET status = ?, completed_at = IF(? = 'completed', NOW(), NULL) WHERE id = ?")
            ->execute([$status, $status, $id]);
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'reorder_assignments':
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }
+        $orders = $_POST['orders'] ?? [];
+        if (!is_array($orders) || empty($orders)) {
+            echo json_encode(['error' => 'orders array required']); break;
+        }
+        $stmt = $db->prepare("UPDATE janitor_task_assignments SET sort_order = ? WHERE id = ?");
+        foreach ($orders as $o) {
+            $stmt->execute([(int)$o['sort_order'], (int)$o['id']]);
+        }
         echo json_encode(['success' => true]);
         break;
 

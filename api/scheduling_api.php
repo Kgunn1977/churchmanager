@@ -501,7 +501,7 @@ switch ($action) {
         $startDate = $_GET['start_date'] ?? date('Y-m-01');
         $endDate = $_GET['end_date'] ?? date('Y-m-t');
 
-        $query = "SELECT ja.id AS assignment_id, ja.assigned_date, ja.status, ja.room_id, ja.task_group_id, ja.task_id,
+        $query = "SELECT ja.id AS assignment_id, ja.assigned_date, ja.status, ja.sort_order, ja.room_id, ja.task_group_id, ja.task_id,
                          ja.assigned_to AS worker_id,
                          COALESCE(tg.name, t.name) AS task_group_name,
                          r.name AS room_name, r.room_number,
@@ -522,7 +522,7 @@ switch ($action) {
             $params = array_merge($params, $ids);
         }
 
-        $query .= " ORDER BY ja.assigned_date, tg.name";
+        $query .= " ORDER BY ja.assigned_date, ja.sort_order, tg.name";
         $stmt = $db->prepare($query);
         $stmt->execute($params);
         echo json_encode($stmt->fetchAll());
