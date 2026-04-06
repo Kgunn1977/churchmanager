@@ -501,7 +501,17 @@ switch ($action) {
         $startDate = $_GET['start_date'] ?? date('Y-m-01');
         $endDate = $_GET['end_date'] ?? date('Y-m-t');
 
-        $query = "SELECT ja.id AS assignment_id, ja.assigned_date, ja.status, ja.sort_order, ja.room_id, ja.task_group_id, ja.task_id,
+        // Check if sort_order column exists (safe for pre-migration)
+        $hasSortOrder = false;
+        try {
+            $colCheck = $db->query("SELECT sort_order FROM janitor_task_assignments LIMIT 0");
+            $hasSortOrder = true;
+        } catch (Exception $e) {}
+
+        $sortCol = $hasSortOrder ? 'ja.sort_order,' : '';
+        $selectSort = $hasSortOrder ? ', ja.sort_order' : '';
+
+        $query = "SELECT ja.id AS assignment_id, ja.assigned_date, ja.status{$selectSort}, ja.room_id, ja.task_group_id, ja.task_id,
                          ja.assigned_to AS worker_id,
                          COALESCE(tg.name, t.name) AS task_group_name,
                          r.name AS room_name, r.room_number,
@@ -522,7 +532,7 @@ switch ($action) {
             $params = array_merge($params, $ids);
         }
 
-        $query .= " ORDER BY ja.assigned_date, ja.sort_order, tg.name";
+        $query .= " ORDER BY ja.assigned_date, {$sortCol} tg.name";
         $stmt = $db->prepare($query);
         $stmt->execute($params);
         echo json_encode($stmt->fetchAll());

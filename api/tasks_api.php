@@ -581,6 +581,12 @@ switch ($action) {
         $params = [$date];
         if ($userId) { $where[] = 'ja.assigned_to = ?'; $params[] = $userId; }
         $whereStr = implode(' AND ', $where);
+
+        // Check if sort_order column exists (safe for pre-migration)
+        $hasSortCol = false;
+        try { $db->query("SELECT sort_order FROM janitor_task_assignments LIMIT 0"); $hasSortCol = true; } catch (Exception $e) {}
+        $sortPrefix = $hasSortCol ? 'ja.sort_order,' : '';
+
         $stmt = $db->prepare("
             SELECT ja.*,
                    COALESCE(tg.name, t_single.name) AS group_name,
@@ -604,7 +610,7 @@ switch ($action) {
             JOIN floors fl      ON fl.id = rm.floor_id
             JOIN buildings b    ON b.id  = fl.building_id
             WHERE {$whereStr}
-            ORDER BY ja.sort_order, COALESCE(tt.priority_order, tt2.priority_order, 999), ja.deadline, COALESCE(tg.name, t_single.name)
+            ORDER BY {$sortPrefix} COALESCE(tt.priority_order, tt2.priority_order, 999), ja.deadline, COALESCE(tg.name, t_single.name)
         ");
         $stmt->execute($params);
         $assignments = $stmt->fetchAll();
