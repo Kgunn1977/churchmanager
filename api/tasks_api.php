@@ -610,6 +610,8 @@ switch ($action) {
         $assignments = $stmt->fetchAll();
 
         // Load checklist for each, with sub-group name for nested groups
+        // The LEFT JOIN is constrained to only match sub-groups that are children
+        // of the assignment's main group, preventing tasks from bleeding across groups
         $stChecklist = $db->prepare("
             SELECT jtc.task_id, t.name AS task_name, t.description AS task_description,
                    t.estimated_minutes AS task_minutes,
@@ -617,7 +619,11 @@ switch ($action) {
                    tgt_sub.task_group_id AS sub_group_id
             FROM janitor_task_checklist jtc
             JOIN tasks t ON t.id = jtc.task_id
-            LEFT JOIN task_group_tasks tgt_sub ON tgt_sub.task_id = t.id
+            LEFT JOIN task_group_tasks tgt_sub
+                ON tgt_sub.task_id = t.id
+                AND tgt_sub.task_group_id IN (
+                    SELECT id FROM task_groups WHERE parent_id = ?
+                )
             WHERE jtc.assignment_id = ?
             ORDER BY tgt_sub.task_group_id, tgt_sub.sort_order, t.name
         ");
@@ -631,17 +637,16 @@ switch ($action) {
         $resCache = []; // cache by task_id
 
         foreach ($assignments as &$a) {
-            $stChecklist->execute([$a['id']]);
+            $mainGroupId = $a['task_group_id'];
+            $stChecklist->execute([$mainGroupId ?: 0, $a['id']]);
             $items = $stChecklist->fetchAll();
 
-            // Resolve sub-group names (only for child groups of this assignment's group)
-            $mainGroupId = $a['task_group_id'];
+            // Resolve sub-group names from the matched child groups
             $sgNameCache = [];
             foreach ($items as &$item) {
                 $sgId = $item['sub_group_id'];
                 $item['sub_group_name'] = null;
-                // Only show sub-group name if the task's group is a child of the main assignment group
-                if ($sgId && $mainGroupId && $sgId != $mainGroupId) {
+                if ($sgId) {
                     if (!isset($sgNameCache[$sgId])) {
                         $stSubGroupName->execute([$sgId]);
                         $row = $stSubGroupName->fetch();

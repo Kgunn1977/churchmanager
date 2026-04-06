@@ -412,6 +412,163 @@ switch ($action) {
         break;
     }
 
+    // ── Remote DB export (token-authenticated, no session needed) ──
+    case 'db_export_api': {
+        $token = trim($_POST['sync_token'] ?? '');
+        if (!$token) {
+            echo json_encode(['error' => 'sync_token required']);
+            break;
+        }
+
+        // Validate token against the stored setting
+        $stk = $db->prepare("SELECT setting_value FROM settings WHERE setting_key = 'sync_token'");
+        $stk->execute();
+        $storedToken = $stk->fetchColumn();
+
+        if (!$storedToken || $token !== $storedToken) {
+            echo json_encode(['error' => 'Invalid sync token']);
+            break;
+        }
+
+        // Build the SQL dump (same logic as db_export but return in response)
+        $tables = $db->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+        $sql = "-- Church Facility Manager DB Snapshot\n";
+        $sql .= "-- Generated: " . date('Y-m-d H:i:s') . "\n";
+        $sql .= "-- Source: " . gethostname() . " (remote export)\n\n";
+        $sql .= "SET FOREIGN_KEY_CHECKS = 0;\n\n";
+
+        foreach ($tables as $table) {
+            if ($table === 'sessions') continue;
+            $create = $db->query("SHOW CREATE TABLE `$table`")->fetch(PDO::FETCH_NUM);
+            $sql .= "DROP TABLE IF EXISTS `$table`;\n";
+            $sql .= $create[1] . ";\n\n";
+
+            $rows = $db->query("SELECT * FROM `$table`")->fetchAll(PDO::FETCH_ASSOC);
+            if (count($rows) > 0) {
+                foreach ($rows as $row) {
+                    $vals = [];
+                    foreach ($row as $v) {
+                        if ($v === null) { $vals[] = 'NULL'; }
+                        else { $vals[] = $db->quote($v); }
+                    }
+                    $cols = '`' . implode('`, `', array_keys($row)) . '`';
+                    $sql .= "INSERT INTO `$table` ($cols) VALUES (" . implode(', ', $vals) . ");\n";
+                }
+                $sql .= "\n";
+            }
+        }
+
+        $sql .= "SET FOREIGN_KEY_CHECKS = 1;\n";
+
+        echo json_encode([
+            'success' => true,
+            'tables' => count($tables),
+            'sql' => base64_encode($sql)
+        ]);
+        break;
+    }
+
+    // ── Pull live DB into local (fetches from remote site) ──
+    case 'db_pull_live': {
+        if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }
+
+        $remoteUrl = trim($_POST['remote_url'] ?? '');
+        $syncToken = trim($_POST['sync_token'] ?? '');
+
+        if (!$remoteUrl || !$syncToken) {
+            echo json_encode(['error' => 'Remote URL and sync token are required']);
+            break;
+        }
+
+        // Normalize URL
+        $remoteUrl = rtrim($remoteUrl, '/');
+        $apiUrl = $remoteUrl . '/api/settings_api.php';
+
+        // Fetch from remote
+        $ch = curl_init($apiUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query([
+                'action' => 'db_export_api',
+                'sync_token' => $syncToken
+            ]),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 120,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError) {
+            echo json_encode(['error' => 'Connection failed: ' . $curlError]);
+            break;
+        }
+        if ($httpCode !== 200) {
+            echo json_encode(['error' => "Remote returned HTTP {$httpCode}"]);
+            break;
+        }
+
+        $data = json_decode($response, true);
+        if (!$data || !isset($data['success']) || !$data['success']) {
+            $err = $data['error'] ?? 'Unknown error from remote';
+            echo json_encode(['error' => 'Remote: ' . $err]);
+            break;
+        }
+
+        $sql = base64_decode($data['sql']);
+        if (!$sql) {
+            echo json_encode(['error' => 'Empty or corrupt SQL from remote']);
+            break;
+        }
+
+        // Also save a backup to data/db_snapshot.sql
+        $root = realpath(__DIR__ . '/..');
+        if (!is_dir($root . '/data')) mkdir($root . '/data', 0755, true);
+        file_put_contents($root . '/data/db_snapshot.sql', $sql);
+
+        // Import the SQL (same logic as db_import)
+        $errors = [];
+        $stmtCount = 0;
+
+        $db->exec("SET FOREIGN_KEY_CHECKS = 0");
+
+        $statements = [];
+        $current = '';
+        foreach (explode("\n", $sql) as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || strpos($trimmed, '--') === 0) continue;
+            $current .= $line . "\n";
+            if (preg_match('/;\s*$/', $trimmed)) {
+                $stmt = trim($current);
+                if ($stmt) $statements[] = $stmt;
+                $current = '';
+            }
+        }
+
+        foreach ($statements as $stmt) {
+            try {
+                $db->exec($stmt);
+                $stmtCount++;
+            } catch (PDOException $e) {
+                $errors[] = substr($e->getMessage(), 0, 200);
+            }
+        }
+
+        $db->exec("SET FOREIGN_KEY_CHECKS = 1");
+
+        echo json_encode([
+            'success' => count($errors) === 0,
+            'statements' => $stmtCount,
+            'tables' => $data['tables'],
+            'errors' => $errors,
+            'source' => $remoteUrl
+        ]);
+        break;
+    }
+
     // ── Git push (commit & push to GitHub) ─────────────────
     case 'git_push': {
         if (!isAdmin()) { echo json_encode(['error' => 'Admin access required']); break; }

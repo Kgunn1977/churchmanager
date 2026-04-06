@@ -230,6 +230,54 @@ $db = getDB();
         </div>
     </div>
 
+    <!-- ── Remote Sync ────────────────────────────────────── -->
+    <div class="bg-white rounded-2xl shadow-sm p-6 border border-transparent hover:border-blue-200 mb-6">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Remote Sync</h2>
+
+        <div class="space-y-5">
+            <!-- Sync Token -->
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Sync Token</label>
+                <p class="text-xs text-gray-400 mb-2">Shared secret used to authenticate remote DB exports. Set the same token on both local and live sites.</p>
+                <div class="flex items-center gap-3">
+                    <input id="sync-token" type="text" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono" placeholder="Enter a sync token...">
+                    <button onclick="generateToken()" class="border border-gray-300 hover:bg-gray-50 text-gray-600 rounded-lg px-3 py-2 text-sm transition" title="Generate random token">Generate</button>
+                    <button onclick="saveSyncToken()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition">Save</button>
+                </div>
+            </div>
+
+            <hr class="border-gray-100">
+
+            <!-- Remote URL -->
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Live Site URL</label>
+                <p class="text-xs text-gray-400 mb-2">The URL of the live site to pull the database from.</p>
+                <div class="flex items-center gap-3">
+                    <input id="remote-url" type="text" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="https://kg-fire.com/churchmanager">
+                    <button onclick="saveLiveUrl()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition">Save</button>
+                </div>
+            </div>
+
+            <hr class="border-gray-100">
+
+            <!-- Pull from Live -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Pull Database from Live</label>
+                    <p class="text-xs text-gray-400 mt-0.5">Connects to the live site, exports its database, and replaces this local database.</p>
+                </div>
+                <button id="db-pull-btn" onclick="dbPullLive()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg px-4 py-2 text-sm transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+                    Pull from Live
+                </button>
+            </div>
+
+            <div id="sync-output" class="hidden">
+                <pre class="bg-gray-900 text-green-400 rounded-lg p-4 text-xs font-mono overflow-x-auto max-h-48 whitespace-pre-wrap"></pre>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- ── Task Type Modal ─────────────────────────────────────── -->
@@ -272,6 +320,9 @@ async function loadSettings() {
     document.getElementById('set-auto-generate').checked = s.auto_generate_assignments === '1';
     if (s.pwa_date_strip_back) document.getElementById('set-date-strip-back').value = s.pwa_date_strip_back;
     if (s.pwa_date_strip_forward) document.getElementById('set-date-strip-forward').value = s.pwa_date_strip_forward;
+    // Remote sync fields
+    if (s.sync_token) document.getElementById('sync-token').value = s.sync_token;
+    if (s.live_site_url) document.getElementById('remote-url').value = s.live_site_url;
 }
 
 async function saveSchedulingSettings() {
@@ -656,6 +707,91 @@ async function gitPull() {
 
     btn.disabled = false;
     btn.innerHTML = '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg> Git Pull';
+}
+
+// ═══════════════════════════════════════════════════════════
+// REMOTE SYNC
+// ═══════════════════════════════════════════════════════════
+function generateToken() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = '';
+    for (let i = 0; i < 32; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
+    document.getElementById('sync-token').value = token;
+}
+
+async function saveSyncToken() {
+    const token = document.getElementById('sync-token').value.trim();
+    if (!token) { alert('Enter a sync token first.'); return; }
+    const r = await fetch(BASE_PATH + '/api/settings_api.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: 'update', key: 'sync_token', value: token })
+    });
+    const result = await r.json();
+    if (result.error) { alert(result.error); return; }
+    showToast('Sync token saved');
+}
+
+async function saveLiveUrl() {
+    const url = document.getElementById('remote-url').value.trim();
+    if (!url) { alert('Enter the live site URL first.'); return; }
+    const r = await fetch(BASE_PATH + '/api/settings_api.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: 'update', key: 'live_site_url', value: url })
+    });
+    const result = await r.json();
+    if (result.error) { alert(result.error); return; }
+    showToast('Live site URL saved');
+}
+
+async function dbPullLive() {
+    const remoteUrl = document.getElementById('remote-url').value.trim();
+    const syncToken = document.getElementById('sync-token').value.trim();
+
+    if (!remoteUrl) { alert('Set the Live Site URL first.'); return; }
+    if (!syncToken) { alert('Set a Sync Token first (must match the live site).'); return; }
+    if (!confirm('This will REPLACE your local database with the live database. Are you sure?')) return;
+
+    const btn = document.getElementById('db-pull-btn');
+    const box = document.getElementById('sync-output');
+    const pre = box.querySelector('pre');
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Pulling...';
+
+    try {
+        const r = await fetch(BASE_PATH + '/api/settings_api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: 'db_pull_live', remote_url: remoteUrl, sync_token: syncToken })
+        });
+        const result = await r.json();
+        box.classList.remove('hidden');
+
+        if (result.success) {
+            pre.textContent = `✅ Database pulled from live successfully!\n\nSource: ${result.source}\nTables: ${result.tables}\nStatements executed: ${result.statements}\n\nA backup was also saved to data/db_snapshot.sql`;
+            pre.classList.remove('text-red-400');
+            pre.classList.add('text-green-400');
+            showToast('Live database pulled successfully');
+        } else {
+            let msg = 'Error: ' + (result.error || 'Unknown error');
+            if (result.errors && result.errors.length > 0) {
+                msg += '\n\nStatements executed: ' + result.statements;
+                msg += '\n\nErrors:\n' + result.errors.join('\n');
+            }
+            pre.textContent = msg;
+            pre.classList.remove('text-green-400');
+            pre.classList.add('text-red-400');
+        }
+    } catch (e) {
+        box.classList.remove('hidden');
+        pre.textContent = 'Error: ' + e.message;
+        pre.classList.add('text-red-400');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg> Pull from Live';
 }
 
 // ═══════════════════════════════════════════════════════════
