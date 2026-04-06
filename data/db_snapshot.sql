@@ -1,5 +1,5 @@
 -- Church Facility Manager DB Snapshot
--- Generated: 2026-04-06 01:52:24
+-- Generated: 2026-04-06 18:32:28
 -- Source: DESKTOP-57SPTNP
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -123,6 +123,7 @@ CREATE TABLE `janitor_task_assignments` (
   `reservation_id` int(11) DEFAULT NULL COMMENT 'if auto-triggered from a reservation',
   `assigned_to` int(11) DEFAULT NULL COMMENT 'user id of janitor',
   `status` enum('pending','in_progress','completed') NOT NULL DEFAULT 'pending',
+  `sort_order` int(11) NOT NULL DEFAULT 0,
   `completed_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `schedule_id` int(11) DEFAULT NULL,
