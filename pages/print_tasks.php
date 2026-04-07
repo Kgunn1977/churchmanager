@@ -232,6 +232,7 @@ if ($canPickWorker) {
 </div>
 
 <script>
+const BASE_PATH = <?= json_encode(BASE_PATH) ?>;
 const USER_ID = <?= (int)$user['id'] ?>;
 const USER_NAME = <?= json_encode($user['name']) ?>;
 let ptDate = document.getElementById('ptDate').value;
@@ -266,7 +267,7 @@ document.getElementById('ptWorker').addEventListener('change', function() {
 
 // ── Data loading ──────────────────────────────────────
 function loadData() {
-    fetch(`/api/tasks_api.php?action=get_janitor_assignments&date=${ptDate}&user_id=${ptWorkerId}&view=${ptScope}`)
+    fetch(BASE_PATH + `/api/tasks_api.php?action=get_janitor_assignments&date=${ptDate}&user_id=${ptWorkerId}&view=${ptScope}`)
         .then(r => r.json())
         .then(data => {
             assignments = data || [];
