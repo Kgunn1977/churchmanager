@@ -44,13 +44,14 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
             <!-- Scheduling dropdown -->
             <div class="relative" data-dropdown>
-                <button class="px-3 py-1.5 rounded-lg transition flex items-center gap-1 <?= in_array($currentPage, ['scheduling.php','task_log.php']) ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
+                <button class="px-3 py-1.5 rounded-lg transition flex items-center gap-1 <?= in_array($currentPage, ['scheduling.php','task_log.php','print_tasks.php']) ? 'bg-blue-600 text-white' : 'text-blue-200 hover:text-white hover:bg-blue-700' ?>">
                     Scheduling
                     <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
                 <div class="nav-dropdown absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[160px] z-50 hidden">
                     <a href="<?= url('/pages/scheduling.php') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition">Cleaning</a>
                     <a href="<?= url('/pages/task_log.php') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition">Task Log</a>
+                    <a href="<?= url('/pages/print_tasks.php') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition">Print Tasks</a>
                     <a href="#" class="block px-4 py-2 text-sm text-gray-400 cursor-default">Maintenance</a>
                 </div>
             </div>

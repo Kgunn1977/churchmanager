@@ -98,6 +98,27 @@ if ($canPickWorker) {
 .j-stat-num { font-size:20px; font-weight:800; color:#111827; }
 .j-stat-label { font-size:10px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; }
 
+/* ── View toggle ──────────────────────────────────────── */
+.j-view-toggle {
+    display:flex; gap:4px; margin-bottom:12px;
+    background:#f3f4f6; border-radius:10px; padding:3px;
+}
+.j-view-btn {
+    flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:8px 12px; border:none; border-radius:8px;
+    font-size:13px; font-weight:600; color:#6b7280;
+    background:transparent; cursor:pointer; transition:all .15s;
+}
+.j-view-btn:hover { color:#374151; }
+.j-view-btn.active {
+    background:#fff; color:#1e40af; box-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+/* ── Assigned-to label in class view ─────────────────── */
+.j-assigned-label {
+    font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px;
+    background:#f0fdf4; color:#15803d; margin-top:4px; display:inline-block;
+}
+
 /* ── Empty state ───────────────────────────────────────── */
 .j-empty {
     text-align:center; padding:48px 24px; color:#9ca3af;
@@ -120,6 +141,18 @@ if ($canPickWorker) {
         </select>
     </div>
     <?php endif; ?>
+
+    <!-- View toggle: Personal / Class -->
+    <div class="j-view-toggle">
+        <button id="j-view-personal" class="j-view-btn active" onclick="setView('personal')">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            My Tasks
+        </button>
+        <button id="j-view-class" class="j-view-btn" onclick="setView('class')">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Team
+        </button>
+    </div>
 
     <!-- Date bar -->
     <div class="j-date-bar">
@@ -151,6 +184,7 @@ if ($canPickWorker) {
 <script>
 const defaultUserId = <?= (int)$user['id'] ?>;
 const canPickWorker = <?= $canPickWorker ? 'true' : 'false' ?>;
+let currentView = 'personal'; // 'personal' or 'class'
 
 function getActiveUserId() {
     if (canPickWorker) {
@@ -158,6 +192,13 @@ function getActiveUserId() {
         return sel ? parseInt(sel.value) : defaultUserId;
     }
     return defaultUserId;
+}
+
+function setView(mode) {
+    currentView = mode;
+    document.getElementById('j-view-personal').classList.toggle('active', mode === 'personal');
+    document.getElementById('j-view-class').classList.toggle('active', mode === 'class');
+    loadAssignments();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -183,7 +224,7 @@ document.getElementById('j-date').value = fmtDate(new Date());
 // ═══════════════════════════════════════════════════════════
 function loadAssignments() {
     const date = document.getElementById('j-date').value;
-    fetch(`${BASE_PATH}/api/tasks_api.php?action=get_janitor_assignments&date=${date}&user_id=${getActiveUserId()}`)
+    fetch(`${BASE_PATH}/api/tasks_api.php?action=get_janitor_assignments&date=${date}&user_id=${getActiveUserId()}&view=${currentView}`)
         .then(r => r.json())
         .then(assignments => {
             renderSummary(assignments);
@@ -296,6 +337,7 @@ function renderList(assignments) {
                     <div class="j-group-title">${esc(a.group_name)}</div>
                     <div class="j-room-label">${esc(a.room_name)} · ${esc(a.building_name)}</div>
                     ${deadlineHtml}
+                    ${currentView === 'class' && a.assigned_to_name ? `<div class="j-assigned-label">${esc(a.assigned_to_name)}</div>` : ''}
                 </div>
                 <div style="text-align:right;">
                     <div class="j-type-badge">${esc(a.type_name)}</div>

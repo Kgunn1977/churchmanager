@@ -120,8 +120,8 @@ foreach ($_agSchedules as $_agSched) {
                 // Task groups
                 foreach ($_agTGIds as $_agTgId) {
                     foreach ($_agWorkerIds as $_agWid) {
-                        $_agChk = $_agDb->prepare("SELECT id FROM janitor_task_assignments WHERE schedule_id=? AND room_id=? AND task_group_id=? AND assigned_to=? AND assigned_date=?");
-                        $_agChk->execute([$_agSched['id'], $_agRid, $_agTgId, $_agWid, $_agDateStr]);
+                        $_agChk = $_agDb->prepare("SELECT id FROM janitor_task_assignments WHERE room_id=? AND task_group_id=? AND assigned_to=? AND assigned_date=?");
+                        $_agChk->execute([$_agRid, $_agTgId, $_agWid, $_agDateStr]);
                         if ($_agChk->fetch()) continue;
 
                         $_agDb->prepare("INSERT INTO janitor_task_assignments (schedule_id,assigned_date,assigned_to,task_group_id,room_id,deadline,status) VALUES (?,?,?,?,?,?,'pending')")
@@ -136,8 +136,8 @@ foreach ($_agSchedules as $_agSched) {
                 // Individual tasks
                 foreach ($_agTIds as $_agTaskId) {
                     foreach ($_agWorkerIds as $_agWid) {
-                        $_agChk = $_agDb->prepare("SELECT id FROM janitor_task_assignments WHERE schedule_id=? AND room_id=? AND task_id=? AND assigned_to=? AND assigned_date=? AND task_group_id IS NULL");
-                        $_agChk->execute([$_agSched['id'], $_agRid, $_agTaskId, $_agWid, $_agDateStr]);
+                        $_agChk = $_agDb->prepare("SELECT id FROM janitor_task_assignments WHERE room_id=? AND task_id=? AND assigned_to=? AND assigned_date=? AND task_group_id IS NULL");
+                        $_agChk->execute([$_agRid, $_agTaskId, $_agWid, $_agDateStr]);
                         if ($_agChk->fetch()) continue;
 
                         $_agDb->prepare("INSERT INTO janitor_task_assignments (schedule_id,assigned_date,assigned_to,task_id,task_group_id,room_id,deadline,status) VALUES (?,?,?,?,NULL,?,?,'pending')")

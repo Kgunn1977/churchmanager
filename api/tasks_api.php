@@ -575,11 +575,28 @@ switch ($action) {
     // ═══════════════════════════════════════════════════════════
 
     case 'get_janitor_assignments':
-        $date   = $_GET['date'] ?? date('Y-m-d');
-        $userId = (int)($_GET['user_id'] ?? 0);
-        $where  = ['ja.assigned_date = ?'];
-        $params = [$date];
-        if ($userId) { $where[] = 'ja.assigned_to = ?'; $params[] = $userId; }
+        $date     = $_GET['date'] ?? date('Y-m-d');
+        $userId   = (int)($_GET['user_id'] ?? 0);
+        $viewMode = $_GET['view'] ?? 'personal'; // 'personal' or 'class'
+        $where    = ['ja.assigned_date = ?'];
+        $params   = [$date];
+
+        if ($viewMode === 'class') {
+            // Class view: show ALL assignments for users with the same role
+            if ($userId) {
+                $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+                $roleStmt->execute([$userId]);
+                $role = $roleStmt->fetchColumn();
+            } else {
+                $role = $user['role'] ?? 'custodial';
+            }
+            $where[] = 'ja.assigned_to IN (SELECT id FROM users WHERE role = ? AND is_active = 1)';
+            $params[] = $role ?: 'custodial';
+        } elseif ($userId) {
+            // Personal view: show only this user's assignments
+            $where[] = 'ja.assigned_to = ?';
+            $params[] = $userId;
+        }
         $whereStr = implode(' AND ', $where);
 
         // Check if sort_order column exists (safe for pre-migration)
@@ -596,6 +613,7 @@ switch ($action) {
                    rm.floor_id AS floor_id,
                    fl.name AS floor_name,
                    b.name  AS building_name,
+                   u_assigned.name AS assigned_to_name,
                    CASE
                        WHEN ja.task_group_id IS NULL THEN 'task'
                        WHEN (SELECT COUNT(*) FROM task_groups tg_child WHERE tg_child.parent_id = tg.id) > 0 THEN 'group_of_groups'
@@ -609,11 +627,41 @@ switch ($action) {
             JOIN rooms rm       ON rm.id = ja.room_id
             JOIN floors fl      ON fl.id = rm.floor_id
             JOIN buildings b    ON b.id  = fl.building_id
+            LEFT JOIN users u_assigned ON u_assigned.id = ja.assigned_to
             WHERE {$whereStr}
             ORDER BY {$sortPrefix} COALESCE(tt.priority_order, tt2.priority_order, 999), ja.deadline, COALESCE(tg.name, t_single.name)
         ");
         $stmt->execute($params);
         $assignments = $stmt->fetchAll();
+
+        // ── Dedup: merge duplicate group+room combos ──
+        // Duplicates can come from: multiple schedules covering the same task+room,
+        // legacy null-schedule rows, or (in class view) multiple workers.
+        if (count($assignments) > 0) {
+            $merged = [];
+            foreach ($assignments as $a) {
+                // Key by group+room (or task+room for single tasks) + assigned_to in personal view
+                $key = ($a['task_group_id'] ?: ('t' . $a['task_id'])) . '_' . $a['room_id'];
+                if ($viewMode === 'personal') {
+                    $key .= '_' . $a['assigned_to'];
+                }
+                if (!isset($merged[$key])) {
+                    $merged[$key] = $a;
+                    $merged[$key]['_all_names'] = [];
+                }
+                $name = $a['assigned_to_name'] ?? '';
+                if ($name && !in_array($name, $merged[$key]['_all_names'])) {
+                    $merged[$key]['_all_names'][] = $name;
+                }
+            }
+            // Flatten names and reindex
+            $assignments = [];
+            foreach ($merged as $a) {
+                $a['assigned_to_name'] = implode(', ', $a['_all_names']);
+                unset($a['_all_names']);
+                $assignments[] = $a;
+            }
+        }
 
         // Load checklist for each, with sub-group name for nested groups
         // tgt_main: sort order from the main group's task_group_tasks (for simple groups)

@@ -501,6 +501,25 @@ html, body {
 .pwa-toolbar button:active { background: #f3f4f6; }
 .pwa-toolbar button.active { background: #eff6ff; border-color: #93c5fd; color: #1e40af; }
 
+/* ── Personal / Team toggle ─────────────────────────────── */
+.team-toggle {
+    display: flex; gap: 4px; padding: 6px 16px; background: #fff;
+    border-bottom: 1px solid #e5e7eb; flex-shrink: 0;
+}
+.team-toggle button {
+    flex: 1; padding: 6px 0; border: 1.5px solid #e5e7eb; border-radius: 10px;
+    background: #fff; font-size: 12px; font-weight: 600; color: #6b7280;
+    cursor: pointer; transition: all .15s; display: flex; align-items: center;
+    justify-content: center; gap: 5px;
+}
+.team-toggle button:active { background: #f3f4f6; }
+.team-toggle button.active { background: #eff6ff; border-color: #93c5fd; color: #1e40af; }
+.assigned-badge {
+    display: inline-block; font-size: 10px; font-weight: 600; color: #15803d;
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;
+    padding: 1px 6px; margin-left: 4px;
+}
+
 /* ── Hide animations ─────────────────────────────────────── */
 .check-item.hiding {
     opacity: 0; max-height: 0; padding: 0; margin: 0; overflow: hidden;
@@ -555,6 +574,18 @@ html, body {
         </button>
     </div>
 
+    <!-- Personal / Team toggle -->
+    <div class="team-toggle">
+        <button id="btnPersonal" class="active" onclick="setTeamView('personal')">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            My Tasks
+        </button>
+        <button id="btnTeam" onclick="setTeamView('class')">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            Team
+        </button>
+    </div>
+
     <!-- Summary -->
     <div class="summary-row" id="summaryRow"></div>
 
@@ -604,6 +635,7 @@ let assignments = [];
 let isOnline = navigator.onLine;
 let showHidden = false;
 let viewMode = 'default'; // 'default' | 'rooms' | 'task' | 'resources'
+let teamView = 'personal'; // 'personal' | 'class'
 let stripAnchor = null; // null = anchored to today, else a Date object
 let dateStatuses = {}; // { 'YYYY-MM-DD': 'complete'|'incomplete'|'none' }
 const STRIP_DAYS_BACK = <?= (int)$_pwaStripBack ?>;
@@ -1035,6 +1067,16 @@ function closeTaskDetail() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// PERSONAL / TEAM TOGGLE
+// ═══════════════════════════════════════════════════════════
+function setTeamView(mode) {
+    teamView = mode;
+    document.getElementById('btnPersonal').classList.toggle('active', mode === 'personal');
+    document.getElementById('btnTeam').classList.toggle('active', mode === 'class');
+    loadAssignments();
+}
+
+// ═══════════════════════════════════════════════════════════
 // SORT & SHOW HIDDEN
 // ═══════════════════════════════════════════════════════════
 function cycleView() {
@@ -1122,7 +1164,7 @@ function loadAssignments() {
         dot.className = 'sync-indicator syncing';
     }
 
-    fetch(BASE_PATH + `/api/tasks_api.php?action=get_janitor_assignments&date=${selectedDate}&user_id=${USER_ID}`)
+    fetch(BASE_PATH + `/api/tasks_api.php?action=get_janitor_assignments&date=${selectedDate}&user_id=${USER_ID}&view=${teamView}`)
         .then(r => {
             if (r.status === 401) { location.reload(); return Promise.reject('auth'); }
             return r.json();
@@ -1241,7 +1283,7 @@ function renderDefaultView() {
                            onchange="toggleCheck(${a.id}, ${c.task_id}, this.checked)">
                     <div style="flex:1;min-width:0;cursor:pointer;" onclick="openTaskDetail(${a.id}, ${c.task_id})">
                         <div class="group-title">${esc(a.group_name)}</div>
-                        <div class="room-label">${esc(a.room_name)} &middot; ${esc(a.building_name)}</div>
+                        <div class="room-label">${esc(a.room_name)} &middot; ${esc(a.building_name)}${teamView === 'class' && a.assigned_to_name ? '<span class="assigned-badge">' + esc(a.assigned_to_name) + '</span>' : ''}</div>
                         ${deadlineHtml}
                     </div>
                     <div style="text-align:right;">
@@ -1269,7 +1311,7 @@ function renderDefaultView() {
                 </svg>
                 <div style="flex:1;min-width:0;">
                     <div class="group-title">${esc(a.group_name)}</div>
-                    <div class="room-label">${esc(a.room_name)} &middot; ${esc(a.building_name)}</div>
+                    <div class="room-label">${esc(a.room_name)} &middot; ${esc(a.building_name)}${teamView === 'class' && a.assigned_to_name ? '<span class="assigned-badge">' + esc(a.assigned_to_name) + '</span>' : ''}</div>
                     ${deadlineHtml}
                 </div>
                 <div style="text-align:right;">
